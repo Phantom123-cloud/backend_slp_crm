@@ -1,0 +1,209 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== ROLES & PERMISSIONS ====================
+
+// Конкретное право — "users.create", "roles.edit", etc.
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   // "Создание пользователей"
+  slug        String   @unique // "users.create", "users.delete"
+  group       String   // "users", "roles", "audit", "files" — для группировки в UI
+  description String?
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+// Роль — набор прав, назначается юзеру напрямую
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  permissions RolePermission[]
+  users       User[]
+
+  @@map("roles")
+}
+
+// Связь Role <-> Permission (many-to-many)
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ==================== USERS ====================
+
+model User {
+  id         String  @id @default(uuid())
+  email      String  @unique
+  password   String
+  firstName  String
+  lastName   String
+  middleName String?
+
+  isActive Boolean   @default(true)
+  isOnline Boolean   @default(false)
+  lastSeen DateTime?
+
+  // Роль пользователя (напрямую)
+  roleId String?
+  role   Role?  @relation(fields: [roleId], references: [id])
+
+  // Профиль торгового
+  tradeCode         String?   @unique
+  firstTripDate     DateTime?
+  isCoordinator     Boolean   @default(false)
+  coordinatorId     String?
+  coordinator       User?     @relation("CoordinatorSubordinates", fields: [coordinatorId], references: [id])
+  subordinates      User[]    @relation("CoordinatorSubordinates")
+
+  // Лимит одновременных сессий
+  maxSessions Int @default(1)
+
+  // Личные данные
+  birthDate         DateTime?
+  isMarried         Boolean?
+  hasChildren       Boolean?
+  hasPassport       Boolean?
+  hasDriverLicense  Boolean?
+  drivingExperience Float?
+  comment           String?   @db.VarChar(500)
+  passportNumber    String?
+  registrationAddress String?
+  livingAddress     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contacts            UserContact[]
+  languages           UserLanguage[]
+  citizenships        UserCitizenship[]
+  documents           UserDocument[]
+  sessions            Session[]
+  auditLogs           AuditLog[]
+
+  @@map("users")
+}
+
+// ==================== USER CONTACTS ====================
+
+enum ContactType {
+  MOBILE
+  WHATSAPP
+  TELEGRAM
+}
+
+model UserContact {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        ContactType
+  countryCode String      // "+998", "+7"
+  phone       String      // номер без кода страны
+  createdAt   DateTime    @default(now())
+
+  @@map("user_contacts")
+}
+
+// ==================== USER LANGUAGES ====================
+
+enum LanguageLevel {
+  BEGINNER
+  ELEMENTARY
+  INTERMEDIATE
+  UPPER_INTERMEDIATE
+  ADVANCED
+  NATIVE
+}
+
+model UserLanguage {
+  id       String        @id @default(uuid())
+  userId   String
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  language String
+  level    LanguageLevel
+
+  @@unique([userId, language])
+  @@map("user_languages")
+}
+
+// ==================== USER CITIZENSHIPS ====================
+
+model UserCitizenship {
+  id      String @id @default(uuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  country String
+
+  @@unique([userId, country])
+  @@map("user_citizenships")
+}
+
+// ==================== DOCUMENTS ====================
+
+model UserDocument {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  fileName    String
+  filePath    String
+  fileSize    Int
+  mimeType    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_documents")
+}
+
+// ==================== SESSIONS ====================
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String   @unique
+  rememberMe   Boolean  @default(false)
+  ip           String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@map("sessions")
+}
+
+// ==================== AUDIT LOG ====================
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String   // "user.created", "role.updated"
+  entity    String   // "user", "role", "permission"
+  entityId  String?
+  details   Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
