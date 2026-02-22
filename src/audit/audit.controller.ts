@@ -1,5 +1,18 @@
-import { Controller, Get, Post, Body, Query, UseGuards, Res } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  UseGuards,
+  Res,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { AuditService } from './audit.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -17,7 +30,8 @@ export class AuditController {
   @RequirePermissions('audit.view')
   @ApiOperation({ summary: 'Экспорт журнала действий' })
   async exportLogs(
-    @Body() dto: {
+    @Body()
+    dto: {
       entity?: string;
       entityId?: string;
       userId?: string;

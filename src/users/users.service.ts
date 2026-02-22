@@ -55,8 +55,9 @@ export class UsersService {
     search?: string;
     page?: number;
     limit?: number;
+    detailed?: boolean;
   }) {
-    const { filter = 'all', search, page = 1, limit = 20 } = params;
+    const { filter = 'all', search, page = 1, limit = 20, detailed = false } = params;
 
     const where: any = {};
     // Порог активности — 2 минуты
@@ -100,20 +101,45 @@ export class UsersService {
       }
     }
 
+    const baseSelect = {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      middleName: true,
+      isActive: true,
+      isOnline: true,
+      lastSeen: true,
+      createdAt: true,
+    };
+
+    const detailedSelect = {
+      ...baseSelect,
+      tradeCode: true,
+      birthDate: true,
+      firstTripDate: true,
+      isCoordinator: true,
+      coordinatorId: true,
+      isMarried: true,
+      hasChildren: true,
+      hasPassport: true,
+      hasDriverLicense: true,
+      drivingExperience: true,
+      comment: true,
+      passportNumber: true,
+      registrationAddress: true,
+      livingAddress: true,
+      role: { select: { name: true } },
+      coordinator: { select: { id: true, firstName: true, lastName: true } },
+      languages: { select: { language: true, level: true } },
+      contacts: { select: { type: true, countryCode: true, phone: true } },
+      citizenships: { select: { country: true } },
+    };
+
     const [data, total] = await Promise.all([
       this.prisma.user.findMany({
         where,
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          middleName: true,
-          isActive: true,
-          isOnline: true,
-          lastSeen: true,
-          createdAt: true,
-        },
+        select: detailed ? detailedSelect : baseSelect,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -122,7 +148,7 @@ export class UsersService {
     ]);
 
     // Вычисляем актуальный isOnline на основе lastSeen
-    const enrichedData = data.map((u) => ({
+    const enrichedData = data.map((u: any) => ({
       ...u,
       isOnline: u.lastSeen ? u.lastSeen >= onlineThreshold : false,
     }));

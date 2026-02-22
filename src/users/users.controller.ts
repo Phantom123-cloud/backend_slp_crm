@@ -43,17 +43,20 @@ export class UsersController {
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'detailed', required: false, enum: ['true', 'false'] })
   findAll(
     @Query('filter') filter?: string,
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('detailed') detailed?: string,
   ) {
     return this.usersService.findAll({
       filter: filter as any,
       search,
       page: page ? parseInt(page) : 1,
       limit: limit ? parseInt(limit) : 20,
+      detailed: detailed === 'true',
     });
   }
 

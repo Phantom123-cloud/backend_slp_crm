@@ -2,9 +2,8 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsString, IsNotEmpty, IsOptional, IsEmail, IsBoolean,
   IsArray, IsNumber, IsEnum, IsDateString, MinLength,
-  MaxLength, ValidateNested, Min, Max, IsInt,
+  MaxLength, Min, Max,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 import { ContactType, LanguageLevel } from '@prisma/client';
 
 // === Регистрация (создание) юзера ===
