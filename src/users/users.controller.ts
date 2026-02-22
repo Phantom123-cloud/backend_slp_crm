@@ -54,8 +54,8 @@ export class UsersController {
     return this.usersService.findAll({
       filter: filter as any,
       search,
-      page: page ? parseInt(page) : 1,
-      limit: limit ? parseInt(limit) : 20,
+      page: page && !Number.isNaN(+page) ? parseInt(page, 10) : 1,
+      limit: limit && !Number.isNaN(+limit) ? parseInt(limit, 10) : 20,
       detailed: detailed === 'true',
     });
   }

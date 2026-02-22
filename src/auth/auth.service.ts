@@ -154,6 +154,10 @@ export class AuthService {
   }
 
   async forceLogout(targetUserId: string, adminId: string, ip?: string) {
+    if (targetUserId === adminId) {
+      throw new BadRequestException('Нельзя принудительно завершить свою сессию');
+    }
+
     await this.prisma.session.deleteMany({
       where: { userId: targetUserId },
     });
@@ -173,6 +177,10 @@ export class AuthService {
   }
 
   async blockUser(targetUserId: string, adminId: string, ip?: string) {
+    if (targetUserId === adminId) {
+      throw new BadRequestException('Нельзя заблокировать самого себя');
+    }
+
     await this.prisma.session.deleteMany({
       where: { userId: targetUserId },
     });

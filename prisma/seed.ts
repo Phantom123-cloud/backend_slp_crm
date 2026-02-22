@@ -16,7 +16,6 @@ async function main() {
     { name: 'Редактирование настроек', slug: 'users.edit_settings', group: 'users', description: 'Редактирование email, пароля, роли' },
     { name: 'Блокировка пользователей', slug: 'users.block', group: 'users', description: 'Блокировка / разблокировка пользователей' },
     { name: 'Принудительный выход', slug: 'users.force_logout', group: 'users', description: 'Принудительное завершение сессии пользователя' },
-    { name: 'Удаление пользователей', slug: 'users.delete', group: 'users', description: 'Удаление пользователей' },
     // Roles
     { name: 'Создание ролей', slug: 'roles.create', group: 'roles', description: 'Создание ролей' },
     { name: 'Просмотр ролей', slug: 'roles.view', group: 'roles', description: 'Просмотр ролей' },
@@ -95,7 +94,7 @@ async function main() {
 
   // Cleanup deprecated permissions
   await prisma.permission.deleteMany({
-    where: { slug: { in: ['files.view', 'files.upload', 'files.delete', 'users.edit'] } },
+    where: { slug: { in: ['files.view', 'files.upload', 'files.delete', 'users.edit', 'users.delete'] } },
   });
 
   console.log('✅ Seed completed!');

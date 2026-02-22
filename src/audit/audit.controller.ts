@@ -18,6 +18,7 @@ import { AuditService } from './audit.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
+import { ExportAuditDto } from './dto/export-audit.dto';
 
 @ApiTags('Audit Log')
 @ApiBearerAuth()
@@ -30,18 +31,7 @@ export class AuditController {
   @RequirePermissions('audit.view')
   @ApiOperation({ summary: 'Экспорт журнала действий' })
   async exportLogs(
-    @Body()
-    dto: {
-      entity?: string;
-      entityId?: string;
-      userId?: string;
-      dateFrom?: string;
-      dateTo?: string;
-      format?: 'xlsx' | 'csv';
-      scope?: 'page' | 'all';
-      page?: number;
-      limit?: number;
-    },
+    @Body() dto: ExportAuditDto,
     @Res() res: Response,
   ) {
     const buffer = await this.auditService.exportLogs({
@@ -88,8 +78,8 @@ export class AuditController {
       userId,
       dateFrom: dateFrom ? new Date(dateFrom) : undefined,
       dateTo: dateTo ? new Date(dateTo) : undefined,
-      page: page ? parseInt(page) : 1,
-      limit: limit ? parseInt(limit) : 20,
+      page: page && !Number.isNaN(+page) ? parseInt(page, 10) : 1,
+      limit: limit && !Number.isNaN(+limit) ? parseInt(limit, 10) : 20,
     });
   }
 }
