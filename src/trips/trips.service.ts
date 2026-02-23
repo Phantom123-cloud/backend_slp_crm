@@ -259,23 +259,17 @@ export class TripsService {
     const hasGA = roles.includes('GA');
     const hasMV_GA = roles.includes('MV_GA');
 
-    // If both MV and GA exist — MV_GA is forbidden
+    // Valid: MV+GA, GA+MV_GA, MV+MV_GA, MV_GA alone
+    // Forbidden: all three (MV + GA + MV_GA)
     if (hasMV && hasGA && hasMV_GA) {
       throw new BadRequestException('errors.crewMvGaConflict');
     }
-    // If GA and MV_GA — MV is forbidden
-    if (hasGA && hasMV_GA && hasMV) {
-      throw new BadRequestException('errors.crewMvGaConflict');
-    }
-    // If MV and MV_GA — GA is forbidden
-    if (hasMV && hasMV_GA && hasGA) {
-      throw new BadRequestException('errors.crewMvGaConflict');
-    }
 
-    // Can't have only MV without GA (and vice versa), but MV_GA alone is ok
+    // Can't have only MV without GA or MV_GA
     if (hasMV && !hasGA && !hasMV_GA) {
       throw new BadRequestException('errors.crewMvNeedsGa');
     }
+    // Can't have only GA without MV or MV_GA
     if (hasGA && !hasMV && !hasMV_GA) {
       throw new BadRequestException('errors.crewGaNeedsMv');
     }
