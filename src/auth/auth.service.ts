@@ -21,16 +21,16 @@ export class AuthService {
     });
 
     if (!user) {
-      throw new UnauthorizedException('Неверный email или пароль');
+      throw new UnauthorizedException('errors.invalidCredentials');
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('Аккаунт заблокирован');
+      throw new UnauthorizedException('errors.accountBlocked');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Неверный email или пароль');
+      throw new UnauthorizedException('errors.invalidCredentials');
     }
 
     // Проверяем лимит одновременных сессий
@@ -38,7 +38,7 @@ export class AuthService {
       where: { userId: user.id, expiresAt: { gt: new Date() } },
     });
     if (activeSessions >= user.maxSessions) {
-      throw new ForbiddenException('Достигнут лимит сессий. Выйдите с другого устройства.');
+      throw new ForbiddenException('errors.sessionLimit');
     }
 
     // Генерируем токены
@@ -98,11 +98,11 @@ export class AuthService {
     });
 
     if (!session || session.expiresAt < new Date()) {
-      throw new UnauthorizedException('Сессия истекла');
+      throw new UnauthorizedException('errors.sessionExpired');
     }
 
     if (!session.user.isActive) {
-      throw new UnauthorizedException('Аккаунт заблокирован');
+      throw new UnauthorizedException('errors.accountBlocked');
     }
 
     const tokens = await this.generateTokens(
@@ -155,7 +155,7 @@ export class AuthService {
 
   async forceLogout(targetUserId: string, adminId: string, ip?: string) {
     if (targetUserId === adminId) {
-      throw new BadRequestException('Нельзя принудительно завершить свою сессию');
+      throw new BadRequestException('errors.cannotForceLogoutSelf');
     }
 
     await this.prisma.session.deleteMany({
@@ -178,7 +178,7 @@ export class AuthService {
 
   async blockUser(targetUserId: string, adminId: string, ip?: string) {
     if (targetUserId === adminId) {
-      throw new BadRequestException('Нельзя заблокировать самого себя');
+      throw new BadRequestException('errors.cannotBlockSelf');
     }
 
     await this.prisma.session.deleteMany({
@@ -222,7 +222,7 @@ export class AuthService {
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Аккаунт деактивирован или не найден');
+      throw new UnauthorizedException('errors.accountDeactivated');
     }
 
     // Проверяем наличие активных сессий (force logout удаляет все сессии)
@@ -230,7 +230,7 @@ export class AuthService {
       where: { userId, expiresAt: { gt: new Date() } },
     });
     if (sessionCount === 0) {
-      throw new UnauthorizedException('Сессия завершена');
+      throw new UnauthorizedException('errors.sessionTerminated');
     }
 
     await this.prisma.user.update({
@@ -295,9 +295,7 @@ export class AuthService {
       where: { userId, expiresAt: { gt: new Date() } },
     });
     if (activeSessions > maxSessions) {
-      throw new BadRequestException(
-        `Невозможно установить лимит ${maxSessions}. Сейчас активных сессий: ${activeSessions}. Сначала завершите лишние сессии.`,
-      );
+      throw new BadRequestException('errors.sessionLimitTooLow');
     }
 
     await this.prisma.user.update({

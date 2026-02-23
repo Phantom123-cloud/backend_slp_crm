@@ -22,7 +22,7 @@ export class UsersService {
   // === Создание (регистрация) юзера ===
   async create(dto: CreateUserDto, adminId: string, ip?: string) {
     const exists = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (exists) throw new ConflictException('Email уже занят');
+    if (exists) throw new ConflictException('errors.emailTaken');
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
@@ -185,7 +185,7 @@ export class UsersService {
       },
     });
 
-    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (!user) throw new NotFoundException('errors.userNotFound');
 
     // Вычисляем актуальный isOnline на основе lastSeen (порог — 2 мин)
     const onlineThreshold = new Date(Date.now() - 2 * 60 * 1000);
@@ -198,12 +198,12 @@ export class UsersService {
   // === Обновить профиль ===
   async updateProfile(id: string, dto: UpdateUserProfileDto, adminId: string, ip?: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
-    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (!user) throw new NotFoundException('errors.userNotFound');
 
     if (dto.tradeCode) {
       const codeExists = await this.prisma.user.findUnique({ where: { tradeCode: dto.tradeCode } });
       if (codeExists && codeExists.id !== id) {
-        throw new ConflictException('Код торгового уже используется');
+        throw new ConflictException('errors.tradeCodeTaken');
       }
     }
 
@@ -233,7 +233,7 @@ export class UsersService {
   // === Контакты ===
   async addContact(userId: string, dto: AddContactDto, adminId: string) {
     const count = await this.prisma.userContact.count({ where: { userId } });
-    if (count >= 5) throw new BadRequestException('Максимум 5 контактов');
+    if (count >= 5) throw new BadRequestException('errors.maxContacts');
 
     this.validatePhone(dto.countryCode, dto.phone);
 
@@ -279,9 +279,7 @@ export class UsersService {
 
     const allowedLengths = rules[countryCode];
     if (allowedLengths && !allowedLengths.includes(phone.length)) {
-      throw new BadRequestException(
-        `Для ${countryCode} номер должен содержать ${allowedLengths.join(' или ')} цифр`,
-      );
+      throw new BadRequestException('errors.phoneInvalidFormat');
     }
   }
 
@@ -290,7 +288,7 @@ export class UsersService {
     const exists = await this.prisma.userLanguage.findUnique({
       where: { userId_language: { userId, language: dto.language } },
     });
-    if (exists) throw new ConflictException('Язык уже добавлен');
+    if (exists) throw new ConflictException('errors.languageAlreadyAdded');
 
     const lang = await this.prisma.userLanguage.create({
       data: { userId, ...dto },
@@ -339,13 +337,13 @@ export class UsersService {
   // === Смена email / пароля / роли ===
   async updateCredentials(id: string, dto: UpdateCredentialsDto, adminId: string, ip?: string) {
     const user = await this.prisma.user.findUnique({ where: { id } });
-    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (!user) throw new NotFoundException('errors.userNotFound');
 
     const updateData: any = {};
 
     if (dto.email) {
       const emailExists = await this.prisma.user.findUnique({ where: { email: dto.email } });
-      if (emailExists && emailExists.id !== id) throw new ConflictException('Email уже занят');
+      if (emailExists && emailExists.id !== id) throw new ConflictException('errors.emailTaken');
       updateData.email = dto.email;
     }
 
@@ -374,15 +372,13 @@ export class UsersService {
   // === Обновить лимит сессий (для любого юзера с правом session.manage) ===
   async updateMaxSessions(targetUserId: string, maxSessions: number, adminId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: targetUserId } });
-    if (!user) throw new NotFoundException('Пользователь не найден');
+    if (!user) throw new NotFoundException('errors.userNotFound');
 
     const activeSessions = await this.prisma.session.count({
       where: { userId: targetUserId, expiresAt: { gt: new Date() } },
     });
     if (activeSessions > maxSessions) {
-      throw new BadRequestException(
-        `Невозможно установить лимит ${maxSessions}. Сейчас активных сессий: ${activeSessions}. Сначала завершите лишние сессии.`,
-      );
+      throw new BadRequestException('errors.sessionLimitTooLow');
     }
 
     await this.prisma.user.update({

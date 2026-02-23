@@ -14,7 +14,7 @@ export class RolesService {
 
   async createPermission(dto: CreatePermissionDto, userId: string) {
     const exists = await this.prisma.permission.findUnique({ where: { slug: dto.slug } });
-    if (exists) throw new ConflictException('Право с таким slug уже существует');
+    if (exists) throw new ConflictException('errors.permissionSlugExists');
 
     const permission = await this.prisma.permission.create({ data: dto });
 
@@ -39,7 +39,7 @@ export class RolesService {
 
   async createRole(dto: CreateRoleDto, userId: string) {
     const exists = await this.prisma.role.findUnique({ where: { name: dto.name } });
-    if (exists) throw new ConflictException('Роль уже существует');
+    if (exists) throw new ConflictException('errors.roleAlreadyExists');
 
     const role = await this.prisma.role.create({
       data: {
@@ -83,7 +83,7 @@ export class RolesService {
       where: { id },
       include: { permissions: { include: { permission: true } } },
     });
-    if (!role) throw new NotFoundException('Роль не найдена');
+    if (!role) throw new NotFoundException('errors.roleNotFound');
     return role;
   }
 
@@ -123,9 +123,7 @@ export class RolesService {
     // Проверяем, не привязана ли роль к пользователям
     const usersWithRole = await this.prisma.user.count({ where: { roleId: id } });
     if (usersWithRole > 0) {
-      throw new ConflictException(
-        `Роль не может быть удалена, так как назначена ${usersWithRole} пользователю(ям). Сначала смените роль у этих пользователей.`,
-      );
+      throw new ConflictException('errors.roleInUse');
     }
 
     await this.prisma.role.delete({ where: { id } });

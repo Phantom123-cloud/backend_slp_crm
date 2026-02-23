@@ -33,7 +33,7 @@ export class FilesService {
     // Проверяем лимит файлов
     const count = await this.prisma.userDocument.count({ where: { userId } });
     if (count >= this.maxFiles) {
-      throw new BadRequestException(`Максимум ${this.maxFiles} файлов`);
+      throw new BadRequestException('errors.maxFiles');
     }
 
     // Проверяем MIME type
@@ -42,7 +42,7 @@ export class FilesService {
       'application/pdf',
     ];
     if (!allowedMimes.includes(file.mimetype)) {
-      throw new BadRequestException('Допустимы только изображения и PDF');
+      throw new BadRequestException('errors.onlyImagesAndPdf');
     }
 
     // Сохраняем файл
@@ -90,10 +90,10 @@ export class FilesService {
 
   async download(docId: string) {
     const doc = await this.prisma.userDocument.findUnique({ where: { id: docId } });
-    if (!doc) throw new NotFoundException('Файл не найден');
+    if (!doc) throw new NotFoundException('errors.fileNotFound');
 
     if (!fs.existsSync(doc.filePath)) {
-      throw new NotFoundException('Файл не найден на диске');
+      throw new NotFoundException('errors.fileNotFoundOnDisk');
     }
 
     const file = fs.createReadStream(doc.filePath);
@@ -106,7 +106,7 @@ export class FilesService {
 
   async updateDetails(docId: string, title: string, description: string | undefined, adminId: string) {
     const doc = await this.prisma.userDocument.findUnique({ where: { id: docId } });
-    if (!doc) throw new NotFoundException('Файл не найден');
+    if (!doc) throw new NotFoundException('errors.fileNotFound');
 
     const updated = await this.prisma.userDocument.update({
       where: { id: docId },
@@ -126,7 +126,7 @@ export class FilesService {
 
   async remove(docId: string, adminId: string) {
     const doc = await this.prisma.userDocument.findUnique({ where: { id: docId } });
-    if (!doc) throw new NotFoundException('Файл не найден');
+    if (!doc) throw new NotFoundException('errors.fileNotFound');
 
     // Удаляем файл с диска
     if (fs.existsSync(doc.filePath)) {
