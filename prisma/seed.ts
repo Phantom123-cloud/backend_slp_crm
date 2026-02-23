@@ -29,6 +29,19 @@ async function main() {
     { name: 'Удаление документов пользователей', slug: 'user_docs.delete', group: 'user_docs', description: 'Удаление документов пользователей' },
     // Session
     { name: 'Настройка лимита одновременных сессий', slug: 'session.manage', group: 'session', description: 'Настройка лимита одновременных сессий для любого аккаунта' },
+    // Trips
+    { name: 'Просмотр поездок', slug: 'trips.view', group: 'trips', description: 'Просмотр всех поездок (без права — видит только свои)' },
+    { name: 'Создание поездок', slug: 'trips.create', group: 'trips', description: 'Создание новых поездок' },
+    { name: 'Редактирование поездок', slug: 'trips.edit', group: 'trips', description: 'Редактирование поездок, состава и координатора' },
+    { name: 'Удаление поездок', slug: 'trips.delete', group: 'trips', description: 'Удаление поездок' },
+    { name: 'Администрирование поездок', slug: 'trips.admin', group: 'trips', description: 'Открытие/закрытие поездок, редактирование закрытых' },
+    // Presentations
+    { name: 'Просмотр презентаций', slug: 'presentations.view', group: 'presentations', description: 'Просмотр презентаций' },
+    { name: 'Создание презентаций', slug: 'presentations.create', group: 'presentations', description: 'Создание презентаций' },
+    { name: 'Редактирование презентаций', slug: 'presentations.edit', group: 'presentations', description: 'Редактирование презентаций и состава' },
+    { name: 'Удаление презентаций', slug: 'presentations.delete', group: 'presentations', description: 'Удаление/отмена презентаций' },
+    // Directories
+    { name: 'Управление справочниками', slug: 'directories.manage', group: 'directories', description: 'Управление типами презентаций и местами проведения' },
   ];
 
   const createdPerms: Record<string, string> = {};

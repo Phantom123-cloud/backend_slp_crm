@@ -98,6 +98,13 @@ model User {
   sessions            Session[]
   auditLogs           AuditLog[]
 
+  // Trip relations
+  tripsCoordinated       Trip[]             @relation("TripCoordinator")
+  tripsCreated           Trip[]             @relation("TripCreatedBy")
+  tripCrewMembers        TripCrew[]
+  presentationsCoordinated Presentation[]   @relation("PresentationCoordinator")
+  presentationCrewMembers  PresentationCrew[]
+
   @@map("users")
 }
 
@@ -187,6 +194,154 @@ model Session {
   createdAt    DateTime @default(now())
 
   @@map("sessions")
+}
+
+// ==================== TRIPS ====================
+
+enum TripStatus {
+  PLANNED
+  ACTIVE
+  CLOSED
+}
+
+enum PresentationStatus {
+  PLANNED
+  COMPLETED
+  CANCELLED
+}
+
+enum TripRole {
+  LEADER
+  MV
+  GA
+  MV_GA
+  TRADER
+}
+
+model Trip {
+  id              String     @id @default(uuid())
+  name            String     // "AA250226" — авто: teamName + format(startDate)
+  teamName        String     // название команды, напр. "AA"
+  startDate       DateTime
+  endDate         DateTime
+  status          TripStatus @default(PLANNED)
+
+  coordinatorId   String?
+  coordinator     User?      @relation("TripCoordinator", fields: [coordinatorId], references: [id])
+
+  createdById     String
+  createdBy       User       @relation("TripCreatedBy", fields: [createdById], references: [id])
+
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  crew            TripCrew[]
+  presentations   Presentation[]
+  warehouse       Warehouse?
+  wallet          Wallet?
+
+  @@map("trips")
+}
+
+model TripCrew {
+  id      String   @id @default(uuid())
+  tripId  String
+  trip    Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User     @relation(fields: [userId], references: [id])
+  role    TripRole
+
+  @@unique([tripId, userId])
+  @@map("trip_crew")
+}
+
+// ==================== PRESENTATIONS ====================
+
+model Presentation {
+  id              String             @id @default(uuid())
+  tripId          String
+  trip            Trip               @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  name            String             // авто: "AA 23.02 #1"
+  date            DateTime
+  time            String             // "08:00"
+  number          Int                // 1 / 2 / 3 по слоту времени
+  status          PresentationStatus @default(PLANNED)
+
+  typeId          String?
+  type            PresentationType?  @relation(fields: [typeId], references: [id])
+
+  venueId         String?
+  venue           Venue?             @relation(fields: [venueId], references: [id])
+
+  coordinatorId   String?
+  coordinator     User?              @relation("PresentationCoordinator", fields: [coordinatorId], references: [id])
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  crew            PresentationCrew[]
+
+  @@map("presentations")
+}
+
+model PresentationCrew {
+  id              String       @id @default(uuid())
+  presentationId  String
+  presentation    Presentation @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User         @relation(fields: [userId], references: [id])
+  role            TripRole
+
+  @@unique([presentationId, userId])
+  @@map("presentation_crew")
+}
+
+// ==================== DIRECTORIES ====================
+
+model PresentationType {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  presentations Presentation[]
+
+  @@map("presentation_types")
+}
+
+model Venue {
+  id        String   @id @default(uuid())
+  city      String
+  address   String
+  venueName String
+  createdAt DateTime @default(now())
+
+  presentations Presentation[]
+
+  @@unique([city, address, venueName])
+  @@map("venues")
+}
+
+// ==================== WAREHOUSE & WALLET (stubs) ====================
+
+model Warehouse {
+  id     String @id @default(uuid())
+  tripId String @unique
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("warehouses")
+}
+
+model Wallet {
+  id     String @id @default(uuid())
+  tripId String @unique
+  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("wallets")
 }
 
 // ==================== AUDIT LOG ====================
