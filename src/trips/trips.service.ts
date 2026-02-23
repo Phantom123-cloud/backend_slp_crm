@@ -244,8 +244,63 @@ export class TripsService {
     });
   }
 
+  private validateCrew(crew: { userId: string; role: string }[]) {
+    const roles = crew.map((m) => m.role);
+
+    // LEADER — strictly 1
+    const leaderCount = roles.filter((r) => r === 'LEADER').length;
+    if (leaderCount > 1) throw new BadRequestException('errors.crewOneLeader');
+
+    // TRADER — max 20
+    const traderCount = roles.filter((r) => r === 'TRADER').length;
+    if (traderCount > 20) throw new BadRequestException('errors.crewMaxTraders');
+
+    const hasMV = roles.includes('MV');
+    const hasGA = roles.includes('GA');
+    const hasMV_GA = roles.includes('MV_GA');
+
+    // If both MV and GA exist — MV_GA is forbidden
+    if (hasMV && hasGA && hasMV_GA) {
+      throw new BadRequestException('errors.crewMvGaConflict');
+    }
+    // If GA and MV_GA — MV is forbidden
+    if (hasGA && hasMV_GA && hasMV) {
+      throw new BadRequestException('errors.crewMvGaConflict');
+    }
+    // If MV and MV_GA — GA is forbidden
+    if (hasMV && hasMV_GA && hasGA) {
+      throw new BadRequestException('errors.crewMvGaConflict');
+    }
+
+    // Can't have only MV without GA (and vice versa), but MV_GA alone is ok
+    if (hasMV && !hasGA && !hasMV_GA) {
+      throw new BadRequestException('errors.crewMvNeedsGa');
+    }
+    if (hasGA && !hasMV && !hasMV_GA) {
+      throw new BadRequestException('errors.crewGaNeedsMv');
+    }
+  }
+
   async setCrew(tripId: string, dto: SetTripCrewDto, userId: string) {
     await this.findById(tripId);
+
+    // Validate crew composition
+    if (dto.crew.length > 0) {
+      this.validateCrew(dto.crew);
+    }
+
+    // Find the LEADER to auto-set coordinator
+    const leader = dto.crew.find((m) => m.role === 'LEADER');
+    let coordinatorId: string | null = null;
+
+    if (leader) {
+      // Get leader's coordinator from user profile
+      const leaderUser = await this.prisma.user.findUnique({
+        where: { id: leader.userId },
+        select: { coordinatorId: true },
+      });
+      coordinatorId = leaderUser?.coordinatorId || null;
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.tripCrew.deleteMany({ where: { tripId } });
@@ -258,6 +313,18 @@ export class TripsService {
           })),
         });
       }
+      // Auto-set coordinator from leader's coordinator
+      if (coordinatorId) {
+        await tx.trip.update({
+          where: { id: tripId },
+          data: { coordinatorId },
+        });
+        // Cascade to presentations
+        await tx.presentation.updateMany({
+          where: { tripId },
+          data: { coordinatorId },
+        });
+      }
     });
 
     await this.auditService.log({
@@ -265,7 +332,7 @@ export class TripsService {
       action: 'trip.crewUpdated',
       entity: 'trip',
       entityId: tripId,
-      details: { crew: dto.crew },
+      details: { crew: dto.crew, coordinatorId },
     });
 
     return this.getCrew(tripId);
