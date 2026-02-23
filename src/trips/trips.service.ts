@@ -251,13 +251,21 @@ export class TripsService {
     const leaderCount = roles.filter((r) => r === 'LEADER').length;
     if (leaderCount > 1) throw new BadRequestException('errors.crewOneLeader');
 
+    // MV, GA, MV_GA — max 1 each
+    const mvCount = roles.filter((r) => r === 'MV').length;
+    const gaCount = roles.filter((r) => r === 'GA').length;
+    const mvGaCount = roles.filter((r) => r === 'MV_GA').length;
+    if (mvCount > 1) throw new BadRequestException('errors.crewOneMv');
+    if (gaCount > 1) throw new BadRequestException('errors.crewOneGa');
+    if (mvGaCount > 1) throw new BadRequestException('errors.crewOneMvGa');
+
     // TRADER — max 20
     const traderCount = roles.filter((r) => r === 'TRADER').length;
     if (traderCount > 20) throw new BadRequestException('errors.crewMaxTraders');
 
-    const hasMV = roles.includes('MV');
-    const hasGA = roles.includes('GA');
-    const hasMV_GA = roles.includes('MV_GA');
+    const hasMV = mvCount > 0;
+    const hasGA = gaCount > 0;
+    const hasMV_GA = mvGaCount > 0;
 
     // Valid: MV+GA, GA+MV_GA, MV+MV_GA, MV_GA alone
     // Forbidden: all three (MV + GA + MV_GA)
