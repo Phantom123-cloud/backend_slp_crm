@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsDateString, IsOptional, IsArray, IsEnum, IsUUID, ValidateNested, Matches } from 'class-validator';
+import { IsString, IsNotEmpty, IsDateString, IsOptional, IsArray, IsEnum, IsUUID, IsInt, IsNumber, ValidateNested, Matches } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { TripRole } from '@prisma/client';
@@ -73,4 +73,48 @@ export class SetPresentationCrewDto {
   @ValidateNested({ each: true })
   @Type(() => PresentationCrewMemberDto)
   crew: PresentationCrewMemberDto[];
+}
+
+export class SummaryRowDto {
+  @ApiProperty()
+  @IsUUID()
+  userId: string;
+
+  @ApiPropertyOptional()
+  @IsInt()
+  @IsOptional()
+  successApproach?: number | null;
+
+  @ApiPropertyOptional()
+  @IsInt()
+  @IsOptional()
+  totalApproach?: number | null;
+
+  @ApiPropertyOptional()
+  @IsInt()
+  @IsOptional()
+  refusalCount?: number | null;
+
+  @ApiPropertyOptional()
+  @IsInt()
+  @IsOptional()
+  refusalValue?: number | null;
+
+  @ApiPropertyOptional()
+  @IsInt()
+  @IsOptional()
+  rewriteCount?: number | null;
+
+  @ApiPropertyOptional()
+  @IsInt()
+  @IsOptional()
+  rewriteValue?: number | null;
+}
+
+export class SaveSummaryDto {
+  @ApiProperty({ type: [SummaryRowDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SummaryRowDto)
+  rows: SummaryRowDto[];
 }

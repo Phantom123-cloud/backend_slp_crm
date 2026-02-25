@@ -12,6 +12,7 @@ import {
   CreatePresentationDto,
   UpdatePresentationDto,
   SetPresentationCrewDto,
+  SaveSummaryDto,
 } from './dto/presentations.dto';
 
 @ApiTags('Presentations')
@@ -77,5 +78,24 @@ export class PresentationsController {
     @CurrentUser('id') userId: string,
   ) {
     return this.presentationsService.setCrew(id, dto, userId);
+  }
+
+  // Summary
+  @Get('presentations/:id/summary')
+  @RequirePermissions('presentations.view')
+  @ApiOperation({ summary: 'Получить итоги презентации' })
+  getSummary(@Param('id') id: string) {
+    return this.presentationsService.getSummary(id);
+  }
+
+  @Post('presentations/:id/summary')
+  @RequirePermissions('presentations.edit')
+  @ApiOperation({ summary: 'Сохранить итоги презентации' })
+  saveSummary(
+    @Param('id') id: string,
+    @Body() dto: SaveSummaryDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.presentationsService.saveSummary(id, dto, userId);
   }
 }

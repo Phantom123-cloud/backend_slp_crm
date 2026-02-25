@@ -103,7 +103,9 @@ model User {
   tripsCreated           Trip[]             @relation("TripCreatedBy")
   tripCrewMembers        TripCrew[]
   presentationsCoordinated Presentation[]   @relation("PresentationCoordinator")
+  presentationsCreated     Presentation[]   @relation("PresentationCreatedBy")
   presentationCrewMembers  PresentationCrew[]
+  presentationSummaryRows  PresentationSummary[]
 
   @@map("users")
 }
@@ -276,10 +278,14 @@ model Presentation {
   coordinatorId   String?
   coordinator     User?              @relation("PresentationCoordinator", fields: [coordinatorId], references: [id])
 
+  createdById     String?
+  createdBy       User?              @relation("PresentationCreatedBy", fields: [createdById], references: [id])
+
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
   crew            PresentationCrew[]
+  summaryRows     PresentationSummary[]
 
   @@map("presentations")
 }
@@ -294,6 +300,26 @@ model PresentationCrew {
 
   @@unique([presentationId, userId])
   @@map("presentation_crew")
+}
+
+model PresentationSummary {
+  id             String       @id @default(uuid())
+  presentationId String
+  presentation   Presentation @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+
+  successApproach Int? // Успешных Часовка
+  totalApproach   Int? // Всех (каждых) Часовка
+  refusalCount    Int? // Количество отказов
+  refusalValue    Int? // Значение отказа
+  rewriteCount    Int? // Количество переписанных
+  rewriteValue    Int? // Ценность переписанных
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([presentationId, userId])
+  @@map("presentation_summary")
 }
 
 // ==================== DIRECTORIES ====================

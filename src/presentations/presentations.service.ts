@@ -9,6 +9,7 @@ import {
   CreatePresentationDto,
   UpdatePresentationDto,
   SetPresentationCrewDto,
+  SaveSummaryDto,
 } from './dto/presentations.dto';
 import { PresentationStatus } from '@prisma/client';
 
@@ -29,9 +30,11 @@ export class PresentationsService {
   }
 
   private generatePresentationName(teamName: string, date: Date, number: number): string {
-    const dd = String(date.getDate()).padStart(2, '0');
+    const yy = String(date.getFullYear()).slice(-2);
     const mm = String(date.getMonth() + 1).padStart(2, '0');
-    return `${teamName} ${dd}.${mm} #${number}`;
+    const dd = String(date.getDate()).padStart(2, '0');
+    const nn = String(number).padStart(2, '0');
+    return `${teamName}${yy}${mm}${dd}${nn}`;
   }
 
   private presentationInclude() {
@@ -40,6 +43,7 @@ export class PresentationsService {
       type: true,
       venue: true,
       coordinator: { select: { id: true, firstName: true, lastName: true, middleName: true } },
+      createdBy: { select: { id: true, firstName: true, lastName: true, middleName: true } },
       crew: {
         include: {
           user: { select: { id: true, firstName: true, lastName: true, middleName: true, tradeCode: true } },
@@ -77,6 +81,11 @@ export class PresentationsService {
     });
     if (!trip) throw new NotFoundException('errors.tripNotFound');
 
+    // Нельзя создать презентацию без состава команды
+    if (trip.crew.length === 0) {
+      throw new BadRequestException('errors.tripNoCrewForPresentation');
+    }
+
     const date = new Date(dto.date);
 
     // Validate date is within trip range
@@ -98,6 +107,7 @@ export class PresentationsService {
         typeId: dto.typeId || null,
         venueId: dto.venueId || null,
         coordinatorId: dto.coordinatorId || trip.coordinatorId || null,
+        createdById: userId,
       },
     });
 
@@ -230,5 +240,70 @@ export class PresentationsService {
     });
 
     return this.findById(id);
+  }
+
+  // ==================== Summary ====================
+
+  async getSummary(id: string) {
+    const presentation = await this.findById(id);
+
+    const existing = await this.prisma.presentationSummary.findMany({
+      where: { presentationId: id },
+    });
+
+    // For each crew member return their summary row (or nulls if not yet filled)
+    return presentation.crew.map((member: any) => {
+      const userId = member.userId || member.user?.id;
+      const row = existing.find((r) => r.userId === userId);
+      return {
+        userId,
+        user: member.user,
+        successApproach: row?.successApproach ?? null,
+        totalApproach:   row?.totalApproach   ?? null,
+        refusalCount:    row?.refusalCount    ?? null,
+        refusalValue:    row?.refusalValue    ?? null,
+        rewriteCount:    row?.rewriteCount    ?? null,
+        rewriteValue:    row?.rewriteValue    ?? null,
+      };
+    });
+  }
+
+  async saveSummary(id: string, dto: SaveSummaryDto, userId: string) {
+    await this.findById(id);
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const row of dto.rows) {
+        await tx.presentationSummary.upsert({
+          where: { presentationId_userId: { presentationId: id, userId: row.userId } },
+          create: {
+            presentationId: id,
+            userId:          row.userId,
+            successApproach: row.successApproach ?? null,
+            totalApproach:   row.totalApproach   ?? null,
+            refusalCount:    row.refusalCount    ?? null,
+            refusalValue:    row.refusalValue    ?? null,
+            rewriteCount:    row.rewriteCount    ?? null,
+            rewriteValue:    row.rewriteValue    ?? null,
+          },
+          update: {
+            successApproach: row.successApproach ?? null,
+            totalApproach:   row.totalApproach   ?? null,
+            refusalCount:    row.refusalCount    ?? null,
+            refusalValue:    row.refusalValue    ?? null,
+            rewriteCount:    row.rewriteCount    ?? null,
+            rewriteValue:    row.rewriteValue    ?? null,
+          },
+        });
+      }
+    });
+
+    await this.auditService.log({
+      userId,
+      action: 'presentation.summaryUpdated',
+      entity: 'presentation',
+      entityId: id,
+    });
+
+    return this.getSummary(id);
   }
 }

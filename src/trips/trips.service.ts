@@ -32,6 +32,22 @@ export class TripsService {
     return `${teamName}${yy}${mm}${dd}`;
   }
 
+  /** Вычисляет эффективный статус выезда на основе дат.
+   *  CLOSED — всегда закрыт (ручная операция).
+   *  ACTIVE  — сегодня попадает в диапазон [startDate, endDate] и не закрыт.
+   *  PLANNED — всё остальное (ещё не начался или уже завершён, но не закрыт).
+   */
+  private computeStatus(trip: { status: string; startDate: Date; endDate: Date }): string {
+    if (trip.status === 'CLOSED') return 'CLOSED';
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const start = new Date(trip.startDate);
+    const end   = new Date(trip.endDate);
+    if (start <= todayEnd && end >= todayStart) return 'ACTIVE';
+    return 'PLANNED';
+  }
+
   private tripInclude() {
     return {
       coordinator: { select: { id: true, firstName: true, lastName: true, middleName: true } },
@@ -47,6 +63,12 @@ export class TripsService {
           type: true,
           venue: true,
           coordinator: { select: { id: true, firstName: true, lastName: true, middleName: true } },
+          createdBy:   { select: { id: true, firstName: true, lastName: true, middleName: true } },
+          crew: {
+            include: {
+              user: { select: { id: true, firstName: true, lastName: true, middleName: true, tradeCode: true } },
+            },
+          },
         },
         orderBy: [{ date: 'asc' as const }, { number: 'asc' as const }],
       },
@@ -59,16 +81,31 @@ export class TripsService {
 
   async findAll(filter?: string, userId?: string, userPermissions?: string[]) {
     const hasViewAll = userPermissions?.includes('trips.view');
+    const isAdmin = userPermissions?.includes('trips.admin');
+
+    // Границы «сегодня» для сравнения с датами
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
     const where: any = {};
 
-    // Filter by status
-    if (filter === 'active') where.status = TripStatus.ACTIVE;
-    else if (filter === 'closed') where.status = TripStatus.CLOSED;
-    else if (filter === 'planned') where.status = TripStatus.PLANNED;
-    // 'all' — no filter
+    // Фильтр по вычисляемому статусу через условия на датах
+    if (filter === 'active') {
+      // Не закрыт + сегодня попадает в [startDate, endDate]
+      where.status = { not: TripStatus.CLOSED };
+      where.startDate = { lte: todayEnd };
+      where.endDate   = { gte: todayStart };
+    } else if (filter === 'closed') {
+      where.status = TripStatus.CLOSED;
+    } else if (filter === 'planned') {
+      // Не закрыт + ещё не начался
+      where.status = { not: TripStatus.CLOSED };
+      where.startDate = { gt: todayEnd };
+    }
+    // 'all' — без дополнительных условий
 
-    // If user doesn't have trips.view, show only trips they're part of
+    // Если у пользователя нет trips.view — показываем только «его» выезды
     if (!hasViewAll && userId) {
       where.OR = [
         { createdById: userId },
@@ -77,31 +114,47 @@ export class TripsService {
       ];
     }
 
-    // Hide closed trips for non-admin
-    if (!userPermissions?.includes('trips.admin') && filter !== 'closed') {
+    // Скрываем закрытые от не-администраторов (кроме явного фильтра 'closed')
+    if (!isAdmin && filter !== 'closed') {
       if (!where.status) {
         where.status = { not: TripStatus.CLOSED };
       }
     }
 
-    return this.prisma.trip.findMany({
+    const trips = await this.prisma.trip.findMany({
       where,
       include: {
         coordinator: { select: { id: true, firstName: true, lastName: true, middleName: true } },
-        createdBy: { select: { id: true, firstName: true, lastName: true, middleName: true } },
+        createdBy:   { select: { id: true, firstName: true, lastName: true, middleName: true } },
+        crew: {
+          include: {
+            user: { select: { id: true, firstName: true, lastName: true, middleName: true, tradeCode: true } },
+          },
+          orderBy: { role: 'asc' as const },
+        },
         _count: { select: { presentations: true, crew: true } },
       },
       orderBy: { startDate: 'desc' },
     });
+
+    // Вычисляем эффективный статус для каждого выезда
+    return trips.map((t) => ({ ...t, status: this.computeStatus(t) }));
   }
 
-  async findById(id: string) {
+  /** Внутренний метод — возвращает «сырой» статус из БД (для проверок внутри сервиса). */
+  private async getTrip(id: string) {
     const trip = await this.prisma.trip.findUnique({
       where: { id },
       include: this.tripInclude(),
     });
     if (!trip) throw new NotFoundException('errors.tripNotFound');
     return trip;
+  }
+
+  /** Публичный метод — возвращает выезд с вычисленным статусом. */
+  async findById(id: string) {
+    const trip = await this.getTrip(id);
+    return { ...trip, status: this.computeStatus(trip) };
   }
 
   async create(dto: CreateTripDto, userId: string) {
@@ -144,7 +197,7 @@ export class TripsService {
   }
 
   async update(id: string, dto: UpdateTripDto, userId: string) {
-    const trip = await this.findById(id);
+    const trip = await this.getTrip(id);
 
     const startDate = dto.startDate ? new Date(dto.startDate) : trip.startDate;
     const endDate = dto.endDate ? new Date(dto.endDate) : trip.endDate;
@@ -191,11 +244,11 @@ export class TripsService {
       details: dto,
     });
 
-    return updated;
+    return { ...updated, status: this.computeStatus(updated) };
   }
 
   async updateStatus(id: string, dto: UpdateTripStatusDto, userId: string) {
-    await this.findById(id);
+    await this.getTrip(id);
 
     const updated = await this.prisma.trip.update({
       where: { id },
@@ -211,11 +264,11 @@ export class TripsService {
       details: { status: dto.status },
     });
 
-    return updated;
+    return { ...updated, status: this.computeStatus(updated) };
   }
 
   async delete(id: string, userId: string) {
-    const trip = await this.findById(id);
+    const trip = await this.getTrip(id);
 
     if (trip.presentations.length > 0) {
       throw new ConflictException('errors.tripHasPresentations');
@@ -234,7 +287,7 @@ export class TripsService {
   // ==================== Crew ====================
 
   async getCrew(tripId: string) {
-    await this.findById(tripId);
+    await this.getTrip(tripId);
     return this.prisma.tripCrew.findMany({
       where: { tripId },
       include: {
@@ -247,8 +300,16 @@ export class TripsService {
   private validateCrew(crew: { userId: string; role: string }[]) {
     const roles = crew.map((m) => m.role);
 
-    // LEADER — strictly 1
+    // Дубликаты userId запрещены
+    const userIds = crew.map((m) => m.userId);
+    const uniqueUserIds = new Set(userIds);
+    if (uniqueUserIds.size !== userIds.length) {
+      throw new BadRequestException('errors.crewDuplicateUser');
+    }
+
+    // LEADER — строго 1 (обязателен)
     const leaderCount = roles.filter((r) => r === 'LEADER').length;
+    if (leaderCount === 0) throw new BadRequestException('errors.crewNeedsLeader');
     if (leaderCount > 1) throw new BadRequestException('errors.crewOneLeader');
 
     // MV, GA, MV_GA — max 1 each
@@ -259,37 +320,41 @@ export class TripsService {
     if (gaCount > 1) throw new BadRequestException('errors.crewOneGa');
     if (mvGaCount > 1) throw new BadRequestException('errors.crewOneMvGa');
 
-    // TRADER — max 20
-    const traderCount = roles.filter((r) => r === 'TRADER').length;
-    if (traderCount > 20) throw new BadRequestException('errors.crewMaxTraders');
-
     const hasMV = mvCount > 0;
     const hasGA = gaCount > 0;
     const hasMV_GA = mvGaCount > 0;
+    const hasAnyMvGa = hasMV || hasGA || hasMV_GA;
 
-    // Valid: MV+GA, GA+MV_GA, MV+MV_GA, MV_GA alone
-    // Forbidden: all three (MV + GA + MV_GA)
+    // Обязательно должен быть хотя бы один из MV/GA/MV_GA
+    if (!hasAnyMvGa) {
+      throw new BadRequestException('errors.crewNeedsMvGa');
+    }
+
+    // Запрещено все три одновременно
     if (hasMV && hasGA && hasMV_GA) {
       throw new BadRequestException('errors.crewMvGaConflict');
     }
 
-    // Can't have only MV without GA or MV_GA
+    // MV один без GA или MV_GA — запрещено
     if (hasMV && !hasGA && !hasMV_GA) {
       throw new BadRequestException('errors.crewMvNeedsGa');
     }
-    // Can't have only GA without MV or MV_GA
+    // GA один без MV или MV_GA — запрещено
     if (hasGA && !hasMV && !hasMV_GA) {
       throw new BadRequestException('errors.crewGaNeedsMv');
     }
   }
 
   async setCrew(tripId: string, dto: SetTripCrewDto, userId: string) {
-    await this.findById(tripId);
+    const trip = await this.getTrip(tripId);
 
-    // Validate crew composition
-    if (dto.crew.length > 0) {
-      this.validateCrew(dto.crew);
+    // Нельзя редактировать закрытый выезд
+    if (trip.status === 'CLOSED') {
+      throw new ConflictException('errors.tripIsClosed');
     }
+
+    // Validate crew composition (всегда, даже пустой состав отклоняем)
+    this.validateCrew(dto.crew);
 
     // Find the LEADER to auto-set coordinator
     const leader = dto.crew.find((m) => m.role === 'LEADER');
@@ -299,9 +364,15 @@ export class TripsService {
       // Get leader's coordinator from user profile
       const leaderUser = await this.prisma.user.findUnique({
         where: { id: leader.userId },
-        select: { coordinatorId: true },
+        select: { coordinatorId: true, isCoordinator: true },
       });
-      coordinatorId = leaderUser?.coordinatorId || null;
+      // Если ведущий сам является координатором — он и есть координатор выезда
+      // Иначе берём coordinatorId из его профиля
+      if (leaderUser?.isCoordinator) {
+        coordinatorId = leader.userId;
+      } else {
+        coordinatorId = leaderUser?.coordinatorId || null;
+      }
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -341,7 +412,7 @@ export class TripsService {
   }
 
   async updateCoordinator(tripId: string, dto: UpdateCoordinatorDto, userId: string) {
-    await this.findById(tripId);
+    await this.getTrip(tripId);
 
     // Update trip coordinator
     await this.prisma.trip.update({
