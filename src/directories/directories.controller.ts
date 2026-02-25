@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Delete,
+  Controller, Get, Post, Patch, Delete,
   Body, Param, UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -8,7 +8,10 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CreatePresentationTypeDto, CreateVenueDto } from './dto/directories.dto';
+import {
+  CreatePresentationTypeDto, UpdatePresentationTypeDto,
+  CreateVenueDto, UpdateVenueDto,
+} from './dto/directories.dto';
 
 @ApiTags('Directories')
 @ApiBearerAuth()
@@ -33,6 +36,17 @@ export class DirectoriesController {
     @CurrentUser('id') userId: string,
   ) {
     return this.directoriesService.createPresentationType(dto, userId);
+  }
+
+  @Patch('presentation-types/:id')
+  @RequirePermissions('directories.manage')
+  @ApiOperation({ summary: 'Обновить тип презентации' })
+  updatePresentationType(
+    @Param('id') id: string,
+    @Body() dto: UpdatePresentationTypeDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.directoriesService.updatePresentationType(id, dto, userId);
   }
 
   @Delete('presentation-types/:id')
@@ -61,6 +75,17 @@ export class DirectoriesController {
     @CurrentUser('id') userId: string,
   ) {
     return this.directoriesService.createVenue(dto, userId);
+  }
+
+  @Patch('venues/:id')
+  @RequirePermissions('directories.manage')
+  @ApiOperation({ summary: 'Обновить место проведения' })
+  updateVenue(
+    @Param('id') id: string,
+    @Body() dto: UpdateVenueDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.directoriesService.updateVenue(id, dto, userId);
   }
 
   @Delete('venues/:id')

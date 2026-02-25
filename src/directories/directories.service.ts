@@ -1,7 +1,10 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { CreatePresentationTypeDto, CreateVenueDto } from './dto/directories.dto';
+import {
+  CreatePresentationTypeDto, UpdatePresentationTypeDto,
+  CreateVenueDto, UpdateVenueDto,
+} from './dto/directories.dto';
 
 @Injectable()
 export class DirectoriesService {
@@ -35,6 +38,28 @@ export class DirectoriesService {
     });
 
     return type;
+  }
+
+  async updatePresentationType(id: string, dto: UpdatePresentationTypeDto, userId: string) {
+    const type = await this.prisma.presentationType.findUnique({ where: { id } });
+    if (!type) throw new NotFoundException('errors.presentationTypeNotFound');
+
+    if (dto.name && dto.name !== type.name) {
+      const exists = await this.prisma.presentationType.findUnique({ where: { name: dto.name } });
+      if (exists) throw new ConflictException('errors.presentationTypeExists');
+    }
+
+    const updated = await this.prisma.presentationType.update({ where: { id }, data: dto });
+
+    await this.auditService.log({
+      userId,
+      action: 'presentationType.updated',
+      entity: 'presentationType',
+      entityId: id,
+      details: dto,
+    });
+
+    return updated;
   }
 
   async deletePresentationType(id: string, userId: string) {
@@ -86,6 +111,23 @@ export class DirectoriesService {
     });
 
     return venue;
+  }
+
+  async updateVenue(id: string, dto: UpdateVenueDto, userId: string) {
+    const venue = await this.prisma.venue.findUnique({ where: { id } });
+    if (!venue) throw new NotFoundException('errors.venueNotFound');
+
+    const updated = await this.prisma.venue.update({ where: { id }, data: dto });
+
+    await this.auditService.log({
+      userId,
+      action: 'venue.updated',
+      entity: 'venue',
+      entityId: id,
+      details: dto,
+    });
+
+    return updated;
   }
 
   async deleteVenue(id: string, userId: string) {

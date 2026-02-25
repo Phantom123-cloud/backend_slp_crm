@@ -15,6 +15,19 @@ export class CreatePresentationTypeDto {
   description?: string;
 }
 
+export class UpdatePresentationTypeDto {
+  @ApiPropertyOptional()
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  name?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
+
 // === Venues ===
 
 export class CreateVenueDto {
@@ -32,4 +45,24 @@ export class CreateVenueDto {
   @IsString()
   @IsNotEmpty()
   venueName: string;
+}
+
+export class UpdateVenueDto {
+  @ApiPropertyOptional()
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  city?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  address?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  venueName?: string;
 }
