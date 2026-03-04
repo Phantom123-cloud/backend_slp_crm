@@ -1,12 +1,19 @@
 import {
-  Injectable, ConflictException, NotFoundException, BadRequestException,
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import {
-  CreateUserDto, UpdateUserProfileDto, AddContactDto,
-  AddLanguageDto, AddCitizenshipDto, UpdateCredentialsDto,
+  CreateUserDto,
+  UpdateUserProfileDto,
+  AddContactDto,
+  AddLanguageDto,
+  AddCitizenshipDto,
+  UpdateCredentialsDto,
   ExportUsersDto,
 } from './dto/users.dto';
 import * as ExcelJS from 'exceljs';
@@ -21,7 +28,9 @@ export class UsersService {
 
   // === Создание (регистрация) юзера ===
   async create(dto: CreateUserDto, adminId: string, ip?: string) {
-    const exists = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const exists = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
     if (exists) throw new ConflictException('errors.emailTaken');
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
@@ -42,7 +51,11 @@ export class UsersService {
       action: 'user.created',
       entity: 'user',
       entityId: user.id,
-      details: { email: dto.email, firstName: dto.firstName, lastName: dto.lastName },
+      details: {
+        email: dto.email,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+      },
       ip,
     });
 
@@ -57,7 +70,13 @@ export class UsersService {
     limit?: number;
     detailed?: boolean;
   }) {
-    const { filter = 'all', search, page = 1, limit = 20, detailed = false } = params;
+    const {
+      filter = 'all',
+      search,
+      page = 1,
+      limit = 20,
+      detailed = false,
+    } = params;
 
     const where: any = {};
     // Порог активности — 2 минуты
@@ -76,10 +95,7 @@ export class UsersService {
         break;
       case 'offline':
         where.isActive = true;
-        where.OR = [
-          { lastSeen: null },
-          { lastSeen: { lt: onlineThreshold } },
-        ];
+        where.OR = [{ lastSeen: null }, { lastSeen: { lt: onlineThreshold } }];
         break;
     }
 
@@ -92,10 +108,7 @@ export class UsersService {
       if (where.OR) {
         const offlineCondition = where.OR;
         delete where.OR;
-        where.AND = [
-          { OR: offlineCondition },
-          { OR: searchCondition },
-        ];
+        where.AND = [{ OR: offlineCondition }, { OR: searchCondition }];
       } else {
         where.OR = searchCondition;
       }
@@ -153,7 +166,13 @@ export class UsersService {
       isOnline: u.lastSeen ? u.lastSeen >= onlineThreshold : false,
     }));
 
-    return { data: enrichedData, total, page, limit, totalPages: Math.ceil(total / limit) };
+    return {
+      data: enrichedData,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   // === Получить юзера по ID (полный профиль) ===
@@ -171,9 +190,14 @@ export class UsersService {
         citizenships: true,
         documents: {
           select: {
-            id: true, title: true, description: true,
-            fileName: true, fileSize: true, mimeType: true,
-            createdAt: true, updatedAt: true,
+            id: true,
+            title: true,
+            description: true,
+            fileName: true,
+            fileSize: true,
+            mimeType: true,
+            createdAt: true,
+            updatedAt: true,
           },
         },
         coordinator: {
@@ -196,12 +220,19 @@ export class UsersService {
   }
 
   // === Обновить профиль ===
-  async updateProfile(id: string, dto: UpdateUserProfileDto, adminId: string, ip?: string) {
+  async updateProfile(
+    id: string,
+    dto: UpdateUserProfileDto,
+    adminId: string,
+    ip?: string,
+  ) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('errors.userNotFound');
 
     if (dto.tradeCode) {
-      const codeExists = await this.prisma.user.findUnique({ where: { tradeCode: dto.tradeCode } });
+      const codeExists = await this.prisma.user.findUnique({
+        where: { tradeCode: dto.tradeCode },
+      });
       if (codeExists && codeExists.id !== id) {
         throw new ConflictException('errors.tradeCodeTaken');
       }
@@ -213,7 +244,8 @@ export class UsersService {
       updateData.coordinatorId = null;
     }
 
-    if (dto.firstTripDate) updateData.firstTripDate = new Date(dto.firstTripDate);
+    if (dto.firstTripDate)
+      updateData.firstTripDate = new Date(dto.firstTripDate);
     if (dto.birthDate) updateData.birthDate = new Date(dto.birthDate);
 
     await this.prisma.user.update({ where: { id }, data: updateData });
@@ -317,7 +349,11 @@ export class UsersService {
   }
 
   // === Гражданства ===
-  async setCitizenships(userId: string, dto: AddCitizenshipDto, adminId: string) {
+  async setCitizenships(
+    userId: string,
+    dto: AddCitizenshipDto,
+    adminId: string,
+  ) {
     await this.prisma.userCitizenship.deleteMany({ where: { userId } });
     await this.prisma.userCitizenship.createMany({
       data: dto.countries.map((country) => ({ userId, country })),
@@ -335,15 +371,23 @@ export class UsersService {
   }
 
   // === Смена email / пароля / роли ===
-  async updateCredentials(id: string, dto: UpdateCredentialsDto, adminId: string, ip?: string) {
+  async updateCredentials(
+    id: string,
+    dto: UpdateCredentialsDto,
+    adminId: string,
+    ip?: string,
+  ) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('errors.userNotFound');
 
     const updateData: any = {};
 
     if (dto.email) {
-      const emailExists = await this.prisma.user.findUnique({ where: { email: dto.email } });
-      if (emailExists && emailExists.id !== id) throw new ConflictException('errors.emailTaken');
+      const emailExists = await this.prisma.user.findUnique({
+        where: { email: dto.email },
+      });
+      if (emailExists && emailExists.id !== id)
+        throw new ConflictException('errors.emailTaken');
       updateData.email = dto.email;
     }
 
@@ -362,7 +406,11 @@ export class UsersService {
       action: 'user.credentials_updated',
       entity: 'user',
       entityId: id,
-      details: { emailChanged: !!dto.email, passwordChanged: !!dto.password, roleChanged: dto.roleId !== undefined },
+      details: {
+        emailChanged: !!dto.email,
+        passwordChanged: !!dto.password,
+        roleChanged: dto.roleId !== undefined,
+      },
       ip,
     });
 
@@ -370,8 +418,14 @@ export class UsersService {
   }
 
   // === Обновить лимит сессий (для любого юзера с правом session.manage) ===
-  async updateMaxSessions(targetUserId: string, maxSessions: number, adminId: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: targetUserId } });
+  async updateMaxSessions(
+    targetUserId: string,
+    maxSessions: number,
+    adminId: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+    });
     if (!user) throw new NotFoundException('errors.userNotFound');
 
     const activeSessions = await this.prisma.session.count({
@@ -408,7 +462,15 @@ export class UsersService {
 
   // === Экспорт пользователей ===
   async exportUsers(dto: ExportUsersDto): Promise<Buffer> {
-    const { fields, format = 'xlsx', scope = 'all', filter = 'all', search, page = 1, limit = 20 } = dto;
+    const {
+      fields,
+      format = 'xlsx',
+      scope = 'all',
+      filter = 'all',
+      search,
+      page = 1,
+      limit = 20,
+    } = dto;
     const fieldSet = new Set(fields);
 
     // Строим where (reuse логики из findAll)
@@ -416,8 +478,12 @@ export class UsersService {
     const onlineThreshold = new Date(Date.now() - 2 * 60 * 1000);
 
     switch (filter) {
-      case 'active': where.isActive = true; break;
-      case 'blocked': where.isActive = false; break;
+      case 'active':
+        where.isActive = true;
+        break;
+      case 'blocked':
+        where.isActive = false;
+        break;
       case 'online':
         where.isActive = true;
         where.lastSeen = { gte: onlineThreshold };
@@ -457,48 +523,126 @@ export class UsersService {
         ...(needsContacts && { contacts: true }),
         ...(needsLanguages && { languages: true }),
         ...(needsCitizenships && { citizenships: true }),
-        ...(needsCoordinator && { coordinator: { select: { firstName: true, lastName: true } } }),
+        ...(needsCoordinator && {
+          coordinator: { select: { firstName: true, lastName: true } },
+        }),
       },
       orderBy: { createdAt: 'desc' },
       ...(scope === 'page' && { skip: (page - 1) * limit, take: limit }),
     });
 
     // Маппинг полей → заголовок + значение
-    const FIELD_MAP: Record<string, { header: string; getValue: (u: any) => string }> = {
+    const FIELD_MAP: Record<
+      string,
+      { header: string; getValue: (u: any) => string }
+    > = {
       email: { header: 'Email', getValue: (u) => u.email || '' },
       lastName: { header: 'Фамилия', getValue: (u) => u.lastName || '' },
       firstName: { header: 'Имя', getValue: (u) => u.firstName || '' },
       middleName: { header: 'Отчество', getValue: (u) => u.middleName || '' },
       role: { header: 'Роль', getValue: (u) => u.role?.name || '' },
-      tradeCode: { header: 'Код торгового', getValue: (u) => u.tradeCode || '' },
-      birthDate: { header: 'Дата рождения', getValue: (u) => u.birthDate ? dayjs(u.birthDate).format('DD.MM.YYYY') : '' },
-      isMarried: { header: 'В браке', getValue: (u) => u.isMarried === true ? 'Да' : u.isMarried === false ? 'Нет' : '' },
-      hasChildren: { header: 'Есть дети', getValue: (u) => u.hasChildren === true ? 'Да' : u.hasChildren === false ? 'Нет' : '' },
-      hasPassport: { header: 'Загранпаспорт', getValue: (u) => u.hasPassport === true ? 'Да' : u.hasPassport === false ? 'Нет' : '' },
-      hasDriverLicense: { header: 'Водительские права', getValue: (u) => u.hasDriverLicense === true ? 'Да' : u.hasDriverLicense === false ? 'Нет' : '' },
-      drivingExperience: { header: 'Стаж вождения', getValue: (u) => u.drivingExperience != null ? String(u.drivingExperience) : '' },
-      passportNumber: { header: 'Номер паспорта', getValue: (u) => u.passportNumber || '' },
-      registrationAddress: { header: 'Адрес прописки', getValue: (u) => u.registrationAddress || '' },
-      livingAddress: { header: 'Адрес проживания', getValue: (u) => u.livingAddress || '' },
+      tradeCode: {
+        header: 'Код торгового',
+        getValue: (u) => u.tradeCode || '',
+      },
+      birthDate: {
+        header: 'Дата рождения',
+        getValue: (u) =>
+          u.birthDate ? dayjs(u.birthDate).format('DD.MM.YYYY') : '',
+      },
+      isMarried: {
+        header: 'В браке',
+        getValue: (u) =>
+          u.isMarried === true ? 'Да' : u.isMarried === false ? 'Нет' : '',
+      },
+      hasChildren: {
+        header: 'Есть дети',
+        getValue: (u) =>
+          u.hasChildren === true ? 'Да' : u.hasChildren === false ? 'Нет' : '',
+      },
+      hasPassport: {
+        header: 'Загранпаспорт',
+        getValue: (u) =>
+          u.hasPassport === true ? 'Да' : u.hasPassport === false ? 'Нет' : '',
+      },
+      hasDriverLicense: {
+        header: 'Водительские права',
+        getValue: (u) =>
+          u.hasDriverLicense === true
+            ? 'Да'
+            : u.hasDriverLicense === false
+              ? 'Нет'
+              : '',
+      },
+      drivingExperience: {
+        header: 'Стаж вождения',
+        getValue: (u) =>
+          u.drivingExperience != null ? String(u.drivingExperience) : '',
+      },
+      passportNumber: {
+        header: 'Номер паспорта',
+        getValue: (u) => u.passportNumber || '',
+      },
+      registrationAddress: {
+        header: 'Адрес прописки',
+        getValue: (u) => u.registrationAddress || '',
+      },
+      livingAddress: {
+        header: 'Адрес проживания',
+        getValue: (u) => u.livingAddress || '',
+      },
       comment: { header: 'Комментарий', getValue: (u) => u.comment || '' },
-      isCoordinator: { header: 'Координатор', getValue: (u) => u.isCoordinator ? 'Да' : 'Нет' },
-      coordinator: { header: 'Координатор (имя)', getValue: (u) => u.coordinator ? `${u.coordinator.lastName} ${u.coordinator.firstName}` : '' },
-      firstTripDate: { header: 'Дата первого выезда', getValue: (u) => u.firstTripDate ? dayjs(u.firstTripDate).format('DD.MM.YYYY') : '' },
+      isCoordinator: {
+        header: 'Координатор',
+        getValue: (u) => (u.isCoordinator ? 'Да' : 'Нет'),
+      },
+      coordinator: {
+        header: 'Координатор (имя)',
+        getValue: (u) =>
+          u.coordinator
+            ? `${u.coordinator.lastName} ${u.coordinator.firstName}`
+            : '',
+      },
+      firstTripDate: {
+        header: 'Дата первого выезда',
+        getValue: (u) =>
+          u.firstTripDate ? dayjs(u.firstTripDate).format('DD.MM.YYYY') : '',
+      },
       languages: {
         header: 'Языки',
-        getValue: (u) => (u.languages || []).map((l: any) => `${l.language} — ${l.level}`).join(format === 'csv' ? '; ' : '\n'),
+        getValue: (u) =>
+          (u.languages || [])
+            .map((l: any) => `${l.language} — ${l.level}`)
+            .join(format === 'csv' ? '; ' : '\n'),
       },
       contacts: {
         header: 'Контакты',
-        getValue: (u) => (u.contacts || []).map((c: any) => `${c.type}: ${c.countryCode}${c.phone}`).join(format === 'csv' ? '; ' : '\n'),
+        getValue: (u) =>
+          (u.contacts || [])
+            .map((c: any) => `${c.type}: ${c.countryCode}${c.phone}`)
+            .join(format === 'csv' ? '; ' : '\n'),
       },
       citizenships: {
         header: 'Гражданства',
-        getValue: (u) => (u.citizenships || []).map((c: any) => c.country).join(format === 'csv' ? '; ' : '\n'),
+        getValue: (u) =>
+          (u.citizenships || [])
+            .map((c: any) => c.country)
+            .join(format === 'csv' ? '; ' : '\n'),
       },
-      isActive: { header: 'Статус', getValue: (u) => u.isActive ? 'Активен' : 'Заблокирован' },
-      isOnline: { header: 'Онлайн', getValue: (u) => (u.lastSeen && u.lastSeen >= onlineThreshold) ? 'Да' : 'Нет' },
-      createdAt: { header: 'Дата создания', getValue: (u) => u.createdAt ? dayjs(u.createdAt).format('DD.MM.YYYY') : '' },
+      isActive: {
+        header: 'Статус',
+        getValue: (u) => (u.isActive ? 'Активен' : 'Заблокирован'),
+      },
+      isOnline: {
+        header: 'Онлайн',
+        getValue: (u) =>
+          u.lastSeen && u.lastSeen >= onlineThreshold ? 'Да' : 'Нет',
+      },
+      createdAt: {
+        header: 'Дата создания',
+        getValue: (u) =>
+          u.createdAt ? dayjs(u.createdAt).format('DD.MM.YYYY') : '',
+      },
     };
 
     // Только выбранные поля
@@ -558,10 +702,12 @@ export class UsersService {
 
     const header = fields.map((f) => `"${fieldMap[f].header}"`).join(SEP);
     const rows = users.map((user) =>
-      fields.map((f) => {
-        const val = fieldMap[f].getValue(user).replace(/"/g, '""');
-        return `"${val}"`;
-      }).join(SEP),
+      fields
+        .map((f) => {
+          const val = fieldMap[f].getValue(user).replace(/"/g, '""');
+          return `"${val}"`;
+        })
+        .join(SEP),
     );
 
     const csv = BOM + [header, ...rows].join('\r\n');

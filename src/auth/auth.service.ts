@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -42,7 +47,11 @@ export class AuthService {
     }
 
     // Генерируем токены
-    const tokens = await this.generateTokens(user.id, user.email, dto.rememberMe);
+    const tokens = await this.generateTokens(
+      user.id,
+      user.email,
+      dto.rememberMe,
+    );
 
     // Сохраняем сессию
     const refreshExpiresIn = dto.rememberMe
@@ -218,7 +227,13 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, firstName: true, lastName: true, isActive: true },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        isActive: true,
+      },
     });
 
     if (!user || !user.isActive) {
@@ -271,7 +286,11 @@ export class AuthService {
     return user.role.permissions.map((rp) => rp.permission.slug);
   }
 
-  private async generateTokens(userId: string, email: string, rememberMe?: boolean) {
+  private async generateTokens(
+    userId: string,
+    email: string,
+    rememberMe?: boolean,
+  ) {
     const payload = { sub: userId, email };
 
     const accessToken = this.jwtService.sign(payload, {

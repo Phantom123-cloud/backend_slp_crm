@@ -1,5 +1,7 @@
 import {
-  Injectable, NotFoundException, BadRequestException,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
   StreamableFile,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -20,7 +22,9 @@ export class FilesService {
     private configService: ConfigService,
   ) {
     this.uploadDir = this.configService.get('UPLOAD_DIR') || './uploads';
-    this.maxFiles = parseInt(this.configService.get('MAX_FILES_PER_USER') || '15');
+    this.maxFiles = parseInt(
+      this.configService.get('MAX_FILES_PER_USER') || '15',
+    );
   }
 
   async upload(
@@ -38,7 +42,10 @@ export class FilesService {
 
     // Проверяем MIME type
     const allowedMimes = [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
       'application/pdf',
     ];
     if (!allowedMimes.includes(file.mimetype)) {
@@ -89,7 +96,9 @@ export class FilesService {
   }
 
   async download(docId: string) {
-    const doc = await this.prisma.userDocument.findUnique({ where: { id: docId } });
+    const doc = await this.prisma.userDocument.findUnique({
+      where: { id: docId },
+    });
     if (!doc) throw new NotFoundException('errors.fileNotFound');
 
     if (!fs.existsSync(doc.filePath)) {
@@ -104,8 +113,15 @@ export class FilesService {
     };
   }
 
-  async updateDetails(docId: string, title: string, description: string | undefined, adminId: string) {
-    const doc = await this.prisma.userDocument.findUnique({ where: { id: docId } });
+  async updateDetails(
+    docId: string,
+    title: string,
+    description: string | undefined,
+    adminId: string,
+  ) {
+    const doc = await this.prisma.userDocument.findUnique({
+      where: { id: docId },
+    });
     if (!doc) throw new NotFoundException('errors.fileNotFound');
 
     const updated = await this.prisma.userDocument.update({
@@ -125,7 +141,9 @@ export class FilesService {
   }
 
   async remove(docId: string, adminId: string) {
-    const doc = await this.prisma.userDocument.findUnique({ where: { id: docId } });
+    const doc = await this.prisma.userDocument.findUnique({
+      where: { id: docId },
+    });
     if (!doc) throw new NotFoundException('errors.fileNotFound');
 
     // Удаляем файл с диска

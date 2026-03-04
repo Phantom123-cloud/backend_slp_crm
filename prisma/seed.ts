@@ -30,13 +30,15 @@ async function main() {
     // Session
     { name: 'Настройка лимита одновременных сессий', slug: 'session.manage', group: 'session', description: 'Настройка лимита одновременных сессий для любого аккаунта' },
     // Trips
-    { name: 'Просмотр поездок', slug: 'trips.view', group: 'trips', description: 'Просмотр всех поездок (без права — видит только свои)' },
+    { name: 'Просмотр всех поездок', slug: 'trips.view-all', group: 'trips', description: 'Просмотр всех поездок в системе вне зависимости от участия' },
+    { name: 'Просмотр своих поездок', slug: 'trips.view-person', group: 'trips', description: 'Просмотр поездок, в которых пользователь является членом команды, координатором или создателем' },
     { name: 'Создание поездок', slug: 'trips.create', group: 'trips', description: 'Создание новых поездок' },
     { name: 'Редактирование поездок', slug: 'trips.edit', group: 'trips', description: 'Редактирование поездок, состава и координатора' },
     { name: 'Удаление поездок', slug: 'trips.delete', group: 'trips', description: 'Удаление поездок' },
     { name: 'Администрирование поездок', slug: 'trips.admin', group: 'trips', description: 'Открытие/закрытие поездок, редактирование закрытых' },
     // Presentations
-    { name: 'Просмотр презентаций', slug: 'presentations.view', group: 'presentations', description: 'Просмотр презентаций' },
+    { name: 'Просмотр всех презентаций', slug: 'presentations.view-all', group: 'presentations', description: 'Просмотр всех презентаций в системе вне зависимости от участия' },
+    { name: 'Просмотр своих презентаций', slug: 'presentations.view-person', group: 'presentations', description: 'Просмотр презентаций, в которых пользователь является членом состава' },
     { name: 'Создание презентаций', slug: 'presentations.create', group: 'presentations', description: 'Создание презентаций' },
     { name: 'Редактирование презентаций', slug: 'presentations.edit', group: 'presentations', description: 'Редактирование презентаций и состава' },
     { name: 'Удаление презентаций', slug: 'presentations.delete', group: 'presentations', description: 'Удаление/отмена презентаций' },

@@ -1,10 +1,24 @@
 import {
-  Controller, Post, Get, Patch, Delete,
-  Param, Body, UseGuards, UseInterceptors,
-  UploadedFile, Res,
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { FilesService } from './files.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -21,7 +35,9 @@ export class FilesController {
 
   @Post('upload/:userId')
   @RequirePermissions('user_docs.upload')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Загрузить документ пользователя' })
   @ApiBody({
@@ -47,8 +63,12 @@ export class FilesController {
   @Get(':docId/download')
   @RequirePermissions('user_docs.view')
   @ApiOperation({ summary: 'Скачать документ' })
-  async download(@Param('docId') docId: string, @Res({ passthrough: true }) res: Response) {
-    const { stream, fileName, mimeType } = await this.filesService.download(docId);
+  async download(
+    @Param('docId') docId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { stream, fileName, mimeType } =
+      await this.filesService.download(docId);
     res.set({
       'Content-Type': mimeType,
       'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,

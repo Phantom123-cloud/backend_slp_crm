@@ -1,12 +1,23 @@
 import {
-  Controller, Get, Post, Patch, Delete,
-  Body, Param, UseGuards,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { PresentationsService } from './presentations.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
-import { RequirePermissions } from '../common/decorators/permissions.decorator';
+import {
+  RequirePermissions,
+  RequireAnyPermission,
+} from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   CreatePresentationDto,
@@ -20,7 +31,21 @@ import {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller()
 export class PresentationsController {
-  constructor(private presentationsService: PresentationsService) {}
+  constructor(
+    private presentationsService: PresentationsService,
+    private prisma: PrismaService,
+  ) {}
+
+  private async getUserPermissions(userId: string): Promise<string[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        role: { include: { permissions: { include: { permission: true } } } },
+      },
+    });
+    if (!user?.role) return [];
+    return user.role.permissions.map((rp) => rp.permission.slug);
+  }
 
   // Presentations under trips
   @Get('trips/:tripId/presentations')
@@ -41,6 +66,17 @@ export class PresentationsController {
   }
 
   // Standalone presentation endpoints
+  @Get('presentations')
+  @RequireAnyPermission('presentations.view-all', 'presentations.view-person')
+  @ApiOperation({ summary: 'Все презентации' })
+  async findAll(
+    @Query('filter') filter: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const permissions = await this.getUserPermissions(userId);
+    return this.presentationsService.findAll(filter, userId, permissions);
+  }
+
   @Get('presentations/:id')
   @ApiOperation({ summary: 'Детали презентации' })
   findById(@Param('id') id: string) {
@@ -61,10 +97,7 @@ export class PresentationsController {
   @Delete('presentations/:id')
   @RequirePermissions('presentations.delete')
   @ApiOperation({ summary: 'Удалить/отменить презентацию' })
-  delete(
-    @Param('id') id: string,
-    @CurrentUser('id') userId: string,
-  ) {
+  delete(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.presentationsService.delete(id, userId);
   }
 
@@ -82,7 +115,7 @@ export class PresentationsController {
 
   // Summary
   @Get('presentations/:id/summary')
-  @RequirePermissions('presentations.view')
+  @RequireAnyPermission('presentations.view-all', 'presentations.view-person')
   @ApiOperation({ summary: 'Получить итоги презентации' })
   getSummary(@Param('id') id: string) {
     return this.presentationsService.getSummary(id);

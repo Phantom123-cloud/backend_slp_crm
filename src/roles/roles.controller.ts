@@ -1,14 +1,27 @@
 import {
-  Controller, Get, Post, Patch, Delete,
-  Body, Param, UseGuards,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
-import { RequirePermissions, RequireAnyPermission } from '../common/decorators/permissions.decorator';
+import {
+  RequirePermissions,
+  RequireAnyPermission,
+} from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CreatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/roles.dto';
+import {
+  CreatePermissionDto,
+  CreateRoleDto,
+  UpdateRoleDto,
+} from './dto/roles.dto';
 
 @ApiTags('Roles & Permissions')
 @ApiBearerAuth()
@@ -22,7 +35,10 @@ export class RolesController {
   @Post('permissions')
   @RequirePermissions('roles.create')
   @ApiOperation({ summary: 'Создать право' })
-  createPermission(@Body() dto: CreatePermissionDto, @CurrentUser('id') userId: string) {
+  createPermission(
+    @Body() dto: CreatePermissionDto,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.rolesService.createPermission(dto, userId);
   }
 
@@ -66,7 +82,11 @@ export class RolesController {
   @Patch(':id')
   @RequirePermissions('roles.edit')
   @ApiOperation({ summary: 'Обновить роль' })
-  updateRole(@Param('id') id: string, @Body() dto: UpdateRoleDto, @CurrentUser('id') userId: string) {
+  updateRole(
+    @Param('id') id: string,
+    @Body() dto: UpdateRoleDto,
+    @CurrentUser('id') userId: string,
+  ) {
     return this.rolesService.updateRole(id, dto, userId);
   }
 

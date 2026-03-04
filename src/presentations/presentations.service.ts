@@ -29,7 +29,11 @@ export class PresentationsService {
     return 3;
   }
 
-  private generatePresentationName(teamName: string, date: Date, number: number): string {
+  private generatePresentationName(
+    teamName: string,
+    date: Date,
+    number: number,
+  ): string {
     const yy = String(date.getFullYear()).slice(-2);
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
@@ -42,11 +46,23 @@ export class PresentationsService {
       trip: { select: { id: true, name: true, teamName: true, status: true } },
       type: true,
       venue: true,
-      coordinator: { select: { id: true, firstName: true, lastName: true, middleName: true } },
-      createdBy: { select: { id: true, firstName: true, lastName: true, middleName: true } },
+      coordinator: {
+        select: { id: true, firstName: true, lastName: true, middleName: true },
+      },
+      createdBy: {
+        select: { id: true, firstName: true, lastName: true, middleName: true },
+      },
       crew: {
         include: {
-          user: { select: { id: true, firstName: true, lastName: true, middleName: true, tradeCode: true } },
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              tradeCode: true,
+            },
+          },
         },
         orderBy: { role: 'asc' as const },
       },
@@ -54,6 +70,43 @@ export class PresentationsService {
   }
 
   // ==================== CRUD ====================
+
+  async findAll(
+    filter?: string,
+    userId?: string,
+    userPermissions?: string[],
+  ) {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+
+    const where: any = {};
+
+    // view-person: только презентации, в составе которых пользователь
+    const isViewAll = userPermissions?.includes('presentations.view-all');
+    if (!isViewAll && userId) {
+      where.crew = { some: { userId } };
+    }
+
+    if (filter === 'active') {
+      where.status = { not: 'CANCELLED' };
+      where.date = { gte: todayStart, lt: todayEnd };
+    } else if (filter === 'planned') {
+      where.status = { not: 'CANCELLED' };
+      where.date = { gte: todayEnd };
+    } else if (filter === 'completed') {
+      where.status = { not: 'CANCELLED' };
+      where.date = { lt: todayStart };
+    } else if (filter === 'cancelled') {
+      where.status = 'CANCELLED';
+    }
+
+    return this.prisma.presentation.findMany({
+      where,
+      include: this.presentationInclude(),
+      orderBy: [{ date: 'asc' }, { number: 'asc' }],
+    });
+  }
 
   async findByTrip(tripId: string) {
     return this.prisma.presentation.findMany({
@@ -68,7 +121,8 @@ export class PresentationsService {
       where: { id },
       include: this.presentationInclude(),
     });
-    if (!presentation) throw new NotFoundException('errors.presentationNotFound');
+    if (!presentation)
+      throw new NotFoundException('errors.presentationNotFound');
     return presentation;
   }
 
@@ -135,7 +189,9 @@ export class PresentationsService {
 
   async update(id: string, dto: UpdatePresentationDto, userId: string) {
     const presentation = await this.findById(id);
-    const trip = await this.prisma.trip.findUnique({ where: { id: presentation.tripId } });
+    const trip = await this.prisma.trip.findUnique({
+      where: { id: presentation.tripId },
+    });
 
     const updateData: any = {};
 
@@ -159,7 +215,8 @@ export class PresentationsService {
 
     if (dto.typeId !== undefined) updateData.typeId = dto.typeId || null;
     if (dto.venueId !== undefined) updateData.venueId = dto.venueId || null;
-    if (dto.coordinatorId !== undefined) updateData.coordinatorId = dto.coordinatorId || null;
+    if (dto.coordinatorId !== undefined)
+      updateData.coordinatorId = dto.coordinatorId || null;
 
     const updated = await this.prisma.presentation.update({
       where: { id },
@@ -259,11 +316,11 @@ export class PresentationsService {
         userId,
         user: member.user,
         successApproach: row?.successApproach ?? null,
-        totalApproach:   row?.totalApproach   ?? null,
-        refusalCount:    row?.refusalCount    ?? null,
-        refusalValue:    row?.refusalValue    ?? null,
-        rewriteCount:    row?.rewriteCount    ?? null,
-        rewriteValue:    row?.rewriteValue    ?? null,
+        totalApproach: row?.totalApproach ?? null,
+        refusalCount: row?.refusalCount ?? null,
+        refusalValue: row?.refusalValue ?? null,
+        rewriteCount: row?.rewriteCount ?? null,
+        rewriteValue: row?.rewriteValue ?? null,
       };
     });
   }
@@ -274,24 +331,26 @@ export class PresentationsService {
     await this.prisma.$transaction(async (tx) => {
       for (const row of dto.rows) {
         await tx.presentationSummary.upsert({
-          where: { presentationId_userId: { presentationId: id, userId: row.userId } },
+          where: {
+            presentationId_userId: { presentationId: id, userId: row.userId },
+          },
           create: {
             presentationId: id,
-            userId:          row.userId,
+            userId: row.userId,
             successApproach: row.successApproach ?? null,
-            totalApproach:   row.totalApproach   ?? null,
-            refusalCount:    row.refusalCount    ?? null,
-            refusalValue:    row.refusalValue    ?? null,
-            rewriteCount:    row.rewriteCount    ?? null,
-            rewriteValue:    row.rewriteValue    ?? null,
+            totalApproach: row.totalApproach ?? null,
+            refusalCount: row.refusalCount ?? null,
+            refusalValue: row.refusalValue ?? null,
+            rewriteCount: row.rewriteCount ?? null,
+            rewriteValue: row.rewriteValue ?? null,
           },
           update: {
             successApproach: row.successApproach ?? null,
-            totalApproach:   row.totalApproach   ?? null,
-            refusalCount:    row.refusalCount    ?? null,
-            refusalValue:    row.refusalValue    ?? null,
-            rewriteCount:    row.rewriteCount    ?? null,
-            rewriteValue:    row.rewriteValue    ?? null,
+            totalApproach: row.totalApproach ?? null,
+            refusalCount: row.refusalCount ?? null,
+            refusalValue: row.refusalValue ?? null,
+            rewriteCount: row.rewriteCount ?? null,
+            rewriteValue: row.rewriteValue ?? null,
           },
         });
       }

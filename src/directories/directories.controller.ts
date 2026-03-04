@@ -1,6 +1,12 @@
 import {
-  Controller, Get, Post, Patch, Delete,
-  Body, Param, UseGuards,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DirectoriesService } from './directories.service';
@@ -9,8 +15,10 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
-  CreatePresentationTypeDto, UpdatePresentationTypeDto,
-  CreateVenueDto, UpdateVenueDto,
+  CreatePresentationTypeDto,
+  UpdatePresentationTypeDto,
+  CreateVenueDto,
+  UpdateVenueDto,
 } from './dto/directories.dto';
 
 @ApiTags('Directories')
@@ -70,10 +78,7 @@ export class DirectoriesController {
   @Post('venues')
   @RequirePermissions('directories.manage')
   @ApiOperation({ summary: 'Создать место проведения' })
-  createVenue(
-    @Body() dto: CreateVenueDto,
-    @CurrentUser('id') userId: string,
-  ) {
+  createVenue(@Body() dto: CreateVenueDto, @CurrentUser('id') userId: string) {
     return this.directoriesService.createVenue(dto, userId);
   }
 
@@ -91,10 +96,7 @@ export class DirectoriesController {
   @Delete('venues/:id')
   @RequirePermissions('directories.manage')
   @ApiOperation({ summary: 'Удалить место проведения' })
-  deleteVenue(
-    @Param('id') id: string,
-    @CurrentUser('id') userId: string,
-  ) {
+  deleteVenue(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.directoriesService.deleteVenue(id, userId);
   }
 }

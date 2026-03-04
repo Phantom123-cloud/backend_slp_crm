@@ -1,7 +1,15 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { CreatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/roles.dto';
+import {
+  CreatePermissionDto,
+  CreateRoleDto,
+  UpdateRoleDto,
+} from './dto/roles.dto';
 
 @Injectable()
 export class RolesService {
@@ -13,7 +21,9 @@ export class RolesService {
   // ==================== Permissions ====================
 
   async createPermission(dto: CreatePermissionDto, userId: string) {
-    const exists = await this.prisma.permission.findUnique({ where: { slug: dto.slug } });
+    const exists = await this.prisma.permission.findUnique({
+      where: { slug: dto.slug },
+    });
     if (exists) throw new ConflictException('errors.permissionSlugExists');
 
     const permission = await this.prisma.permission.create({ data: dto });
@@ -38,7 +48,9 @@ export class RolesService {
   // ==================== Roles ====================
 
   async createRole(dto: CreateRoleDto, userId: string) {
-    const exists = await this.prisma.role.findUnique({ where: { name: dto.name } });
+    const exists = await this.prisma.role.findUnique({
+      where: { name: dto.name },
+    });
     if (exists) throw new ConflictException('errors.roleAlreadyExists');
 
     const role = await this.prisma.role.create({
@@ -93,7 +105,10 @@ export class RolesService {
     if (dto.permissionIds) {
       await this.prisma.rolePermission.deleteMany({ where: { roleId: id } });
       await this.prisma.rolePermission.createMany({
-        data: dto.permissionIds.map((permissionId) => ({ roleId: id, permissionId })),
+        data: dto.permissionIds.map((permissionId) => ({
+          roleId: id,
+          permissionId,
+        })),
       });
     }
 
@@ -121,7 +136,9 @@ export class RolesService {
     await this.findRoleById(id);
 
     // Проверяем, не привязана ли роль к пользователям
-    const usersWithRole = await this.prisma.user.count({ where: { roleId: id } });
+    const usersWithRole = await this.prisma.user.count({
+      where: { roleId: id },
+    });
     if (usersWithRole > 0) {
       throw new ConflictException('errors.roleInUse');
     }

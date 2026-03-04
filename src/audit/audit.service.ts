@@ -61,7 +61,11 @@ export class AuditService {
     const [data, total] = await Promise.all([
       this.prisma.auditLog.findMany({
         where,
-        include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+        include: {
+          user: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -88,20 +92,54 @@ export class AuditService {
 
     const logs = await this.prisma.auditLog.findMany({
       where,
-      include: { user: { select: { id: true, firstName: true, lastName: true, email: true } } },
+      include: {
+        user: {
+          select: { id: true, firstName: true, lastName: true, email: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       ...(scope === 'page' && { skip: (page - 1) * limit, take: limit }),
     });
 
     const fields = [
-      { header: 'Дата', key: 'date', getValue: (l: any) => dayjs(l.createdAt).format('DD.MM.YYYY HH:mm:ss') },
-      { header: 'Пользователь', key: 'user', getValue: (l: any) => l.user ? `${l.user.lastName} ${l.user.firstName}` : '—' },
-      { header: 'Email', key: 'email', getValue: (l: any) => l.user?.email || '—' },
-      { header: 'Действие', key: 'action', getValue: (l: any) => l.action || '' },
-      { header: 'Сущность', key: 'entity', getValue: (l: any) => l.entity || '' },
-      { header: 'ID сущности', key: 'entityId', getValue: (l: any) => l.entityId || '' },
+      {
+        header: 'Дата',
+        key: 'date',
+        getValue: (l: any) => dayjs(l.createdAt).format('DD.MM.YYYY HH:mm:ss'),
+      },
+      {
+        header: 'Пользователь',
+        key: 'user',
+        getValue: (l: any) =>
+          l.user ? `${l.user.lastName} ${l.user.firstName}` : '—',
+      },
+      {
+        header: 'Email',
+        key: 'email',
+        getValue: (l: any) => l.user?.email || '—',
+      },
+      {
+        header: 'Действие',
+        key: 'action',
+        getValue: (l: any) => l.action || '',
+      },
+      {
+        header: 'Сущность',
+        key: 'entity',
+        getValue: (l: any) => l.entity || '',
+      },
+      {
+        header: 'ID сущности',
+        key: 'entityId',
+        getValue: (l: any) => l.entityId || '',
+      },
       { header: 'IP', key: 'ip', getValue: (l: any) => l.ip || '' },
-      { header: 'Детали', key: 'details', getValue: (l: any) => l.details ? JSON.stringify(l.details, null, 0) : '' },
+      {
+        header: 'Детали',
+        key: 'details',
+        getValue: (l: any) =>
+          l.details ? JSON.stringify(l.details, null, 0) : '',
+      },
     ];
 
     if (format === 'csv') {
@@ -151,10 +189,12 @@ export class AuditService {
 
     const header = fields.map((f) => `"${f.header}"`).join(SEP);
     const rows = logs.map((log) =>
-      fields.map((f) => {
-        const val = f.getValue(log).replace(/"/g, '""');
-        return `"${val}"`;
-      }).join(SEP),
+      fields
+        .map((f) => {
+          const val = f.getValue(log).replace(/"/g, '""');
+          return `"${val}"`;
+        })
+        .join(SEP),
     );
 
     const csv = BOM + [header, ...rows].join('\r\n');

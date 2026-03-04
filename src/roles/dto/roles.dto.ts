@@ -36,7 +36,10 @@ export class CreateRoleDto {
   @IsOptional()
   description?: string;
 
-  @ApiPropertyOptional({ type: [String], example: ['perm-uuid-1', 'perm-uuid-2'] })
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['perm-uuid-1', 'perm-uuid-2'],
+  })
   @IsArray()
   @IsOptional()
   permissionIds?: string[];

@@ -1,8 +1,21 @@
 import {
-  Controller, Get, Post, Patch, Delete,
-  Body, Param, Query, UseGuards, Req,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { TripsService } from './trips.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -49,7 +62,11 @@ export class TripsController {
 
   @Get()
   @ApiOperation({ summary: 'Список поездок' })
-  @ApiQuery({ name: 'filter', required: false, enum: ['all', 'active', 'closed', 'planned'] })
+  @ApiQuery({
+    name: 'filter',
+    required: false,
+    enum: ['all', 'active', 'closed', 'planned'],
+  })
   async findAll(
     @Query('filter') filter: string,
     @CurrentUser('id') userId: string,

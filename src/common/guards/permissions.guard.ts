@@ -1,6 +1,9 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PERMISSIONS_KEY, ANY_PERMISSIONS_KEY } from '../decorators/permissions.decorator';
+import {
+  PERMISSIONS_KEY,
+  ANY_PERMISSIONS_KEY,
+} from '../decorators/permissions.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()

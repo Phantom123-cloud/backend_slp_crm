@@ -1,8 +1,18 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  IsString, IsNotEmpty, IsOptional, IsEmail, IsBoolean,
-  IsArray, IsNumber, IsEnum, IsDateString, MinLength,
-  MaxLength, Min, Max,
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEmail,
+  IsBoolean,
+  IsArray,
+  IsNumber,
+  IsEnum,
+  IsDateString,
+  MinLength,
+  MaxLength,
+  Min,
+  Max,
 } from 'class-validator';
 import { ContactType, LanguageLevel } from '@prisma/client';
 
@@ -168,7 +178,9 @@ export class ExportUsersDto {
   @IsOptional()
   scope?: 'page' | 'all';
 
-  @ApiPropertyOptional({ enum: ['all', 'active', 'blocked', 'online', 'offline'] })
+  @ApiPropertyOptional({
+    enum: ['all', 'active', 'blocked', 'online', 'offline'],
+  })
   @IsString()
   @IsOptional()
   filter?: string;

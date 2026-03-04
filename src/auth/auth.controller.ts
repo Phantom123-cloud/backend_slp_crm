@@ -1,4 +1,13 @@
-import { Controller, Post, Get, Patch, Body, UseGuards, Req, HttpCode } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Body,
+  UseGuards,
+  Req,
+  HttpCode,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Request } from 'express';
@@ -21,11 +30,7 @@ export class AuthController {
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   @ApiOperation({ summary: 'Вход в систему' })
   login(@Body() dto: LoginDto, @Req() req: Request) {
-    return this.authService.login(
-      dto,
-      req.ip,
-      req.headers['user-agent'],
-    );
+    return this.authService.login(dto, req.ip, req.headers['user-agent']);
   }
 
   @Get('me')

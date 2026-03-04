@@ -30,10 +30,7 @@ export class AuditController {
   @Post('export')
   @RequirePermissions('audit.view')
   @ApiOperation({ summary: 'Экспорт журнала действий' })
-  async exportLogs(
-    @Body() dto: ExportAuditDto,
-    @Res() res: Response,
-  ) {
+  async exportLogs(@Body() dto: ExportAuditDto, @Res() res: Response) {
     const buffer = await this.auditService.exportLogs({
       ...dto,
       dateFrom: dto.dateFrom ? new Date(dto.dateFrom) : undefined,

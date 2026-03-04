@@ -37,24 +37,56 @@ export class TripsService {
    *  ACTIVE  — сегодня попадает в диапазон [startDate, endDate] и не закрыт.
    *  PLANNED — всё остальное (ещё не начался или уже завершён, но не закрыт).
    */
-  private computeStatus(trip: { status: string; startDate: Date; endDate: Date }): string {
+  private computeStatus(trip: {
+    status: string;
+    startDate: Date;
+    endDate: Date;
+  }): string {
     if (trip.status === 'CLOSED') return 'CLOSED';
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
+    const todayEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
     const start = new Date(trip.startDate);
-    const end   = new Date(trip.endDate);
+    const end = new Date(trip.endDate);
     if (start <= todayEnd && end >= todayStart) return 'ACTIVE';
     return 'PLANNED';
   }
 
   private tripInclude() {
     return {
-      coordinator: { select: { id: true, firstName: true, lastName: true, middleName: true } },
-      createdBy: { select: { id: true, firstName: true, lastName: true, middleName: true } },
+      coordinator: {
+        select: { id: true, firstName: true, lastName: true, middleName: true },
+      },
+      createdBy: {
+        select: { id: true, firstName: true, lastName: true, middleName: true },
+      },
       crew: {
         include: {
-          user: { select: { id: true, firstName: true, lastName: true, middleName: true, tradeCode: true } },
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              tradeCode: true,
+            },
+          },
         },
         orderBy: { role: 'asc' as const },
       },
@@ -62,11 +94,33 @@ export class TripsService {
         include: {
           type: true,
           venue: true,
-          coordinator: { select: { id: true, firstName: true, lastName: true, middleName: true } },
-          createdBy:   { select: { id: true, firstName: true, lastName: true, middleName: true } },
+          coordinator: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+            },
+          },
           crew: {
             include: {
-              user: { select: { id: true, firstName: true, lastName: true, middleName: true, tradeCode: true } },
+              user: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  middleName: true,
+                  tradeCode: true,
+                },
+              },
             },
           },
         },
@@ -80,13 +134,29 @@ export class TripsService {
   // ==================== CRUD ====================
 
   async findAll(filter?: string, userId?: string, userPermissions?: string[]) {
-    const hasViewAll = userPermissions?.includes('trips.view');
+    const hasViewAll = userPermissions?.includes('trips.view-all');
     const isAdmin = userPermissions?.includes('trips.admin');
 
     // Границы «сегодня» для сравнения с датами
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const todayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0,
+      0,
+    );
+    const todayEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59,
+      999,
+    );
 
     const where: any = {};
 
@@ -95,7 +165,7 @@ export class TripsService {
       // Не закрыт + сегодня попадает в [startDate, endDate]
       where.status = { not: TripStatus.CLOSED };
       where.startDate = { lte: todayEnd };
-      where.endDate   = { gte: todayStart };
+      where.endDate = { gte: todayStart };
     } else if (filter === 'closed') {
       where.status = TripStatus.CLOSED;
     } else if (filter === 'planned') {
@@ -105,7 +175,7 @@ export class TripsService {
     }
     // 'all' — без дополнительных условий
 
-    // Если у пользователя нет trips.view — показываем только «его» выезды
+    // Если у пользователя нет trips.view-all — показываем только «его» выезды
     if (!hasViewAll && userId) {
       where.OR = [
         { createdById: userId },
@@ -124,11 +194,33 @@ export class TripsService {
     const trips = await this.prisma.trip.findMany({
       where,
       include: {
-        coordinator: { select: { id: true, firstName: true, lastName: true, middleName: true } },
-        createdBy:   { select: { id: true, firstName: true, lastName: true, middleName: true } },
+        coordinator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+          },
+        },
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+          },
+        },
         crew: {
           include: {
-            user: { select: { id: true, firstName: true, lastName: true, middleName: true, tradeCode: true } },
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                tradeCode: true,
+              },
+            },
           },
           orderBy: { role: 'asc' as const },
         },
@@ -190,7 +282,12 @@ export class TripsService {
       action: 'trip.created',
       entity: 'trip',
       entityId: trip.id,
-      details: { name, teamName: dto.teamName, startDate: dto.startDate, endDate: dto.endDate },
+      details: {
+        name,
+        teamName: dto.teamName,
+        startDate: dto.startDate,
+        endDate: dto.endDate,
+      },
     });
 
     return this.findById(trip.id);
@@ -211,10 +308,7 @@ export class TripsService {
       const outOfRange = await this.prisma.presentation.count({
         where: {
           tripId: id,
-          OR: [
-            { date: { lt: startDate } },
-            { date: { gt: endDate } },
-          ],
+          OR: [{ date: { lt: startDate } }, { date: { gt: endDate } }],
         },
       });
       if (outOfRange > 0) {
@@ -291,7 +385,17 @@ export class TripsService {
     return this.prisma.tripCrew.findMany({
       where: { tripId },
       include: {
-        user: { select: { id: true, firstName: true, lastName: true, middleName: true, tradeCode: true, isCoordinator: true, coordinatorId: true } },
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+            tradeCode: true,
+            isCoordinator: true,
+            coordinatorId: true,
+          },
+        },
       },
       orderBy: { role: 'asc' },
     });
@@ -309,7 +413,8 @@ export class TripsService {
 
     // LEADER — строго 1 (обязателен)
     const leaderCount = roles.filter((r) => r === 'LEADER').length;
-    if (leaderCount === 0) throw new BadRequestException('errors.crewNeedsLeader');
+    if (leaderCount === 0)
+      throw new BadRequestException('errors.crewNeedsLeader');
     if (leaderCount > 1) throw new BadRequestException('errors.crewOneLeader');
 
     // MV, GA, MV_GA — max 1 each
@@ -411,7 +516,11 @@ export class TripsService {
     return this.getCrew(tripId);
   }
 
-  async updateCoordinator(tripId: string, dto: UpdateCoordinatorDto, userId: string) {
+  async updateCoordinator(
+    tripId: string,
+    dto: UpdateCoordinatorDto,
+    userId: string,
+  ) {
     await this.getTrip(tripId);
 
     // Update trip coordinator
@@ -444,10 +553,7 @@ export class TripsService {
     return this.prisma.user.findMany({
       where: {
         isActive: true,
-        OR: [
-          { isCoordinator: true },
-          { coordinatorId: { not: null } },
-        ],
+        OR: [{ isCoordinator: true }, { coordinatorId: { not: null } }],
       },
       select: {
         id: true,
@@ -457,7 +563,14 @@ export class TripsService {
         tradeCode: true,
         isCoordinator: true,
         coordinatorId: true,
-        coordinator: { select: { id: true, firstName: true, lastName: true, middleName: true } },
+        coordinator: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            middleName: true,
+          },
+        },
       },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });

@@ -1,8 +1,22 @@
 import {
-  Controller, Get, Post, Patch, Delete,
-  Body, Param, Query, UseGuards, Req, Res,
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Req,
+  Res,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { UsersService } from './users.service';
 import { AuthService } from '../auth/auth.service';
@@ -11,8 +25,12 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
-  CreateUserDto, UpdateUserProfileDto, AddContactDto,
-  AddLanguageDto, AddCitizenshipDto, UpdateCredentialsDto,
+  CreateUserDto,
+  UpdateUserProfileDto,
+  AddContactDto,
+  AddLanguageDto,
+  AddCitizenshipDto,
+  UpdateCredentialsDto,
   ExportUsersDto,
 } from './dto/users.dto';
 import { UpdateMaxSessionsDto } from '../auth/dto/update-max-sessions.dto';
@@ -32,14 +50,22 @@ export class UsersController {
   @Post()
   @RequirePermissions('users.create')
   @ApiOperation({ summary: 'Создать пользователя' })
-  create(@Body() dto: CreateUserDto, @CurrentUser('id') adminId: string, @Req() req: Request) {
+  create(
+    @Body() dto: CreateUserDto,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
+  ) {
     return this.usersService.create(dto, adminId, req.ip);
   }
 
   @Get()
   @RequirePermissions('users.view')
   @ApiOperation({ summary: 'Список пользователей' })
-  @ApiQuery({ name: 'filter', required: false, enum: ['all', 'active', 'blocked', 'online', 'offline'] })
+  @ApiQuery({
+    name: 'filter',
+    required: false,
+    enum: ['all', 'active', 'blocked', 'online', 'offline'],
+  })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
@@ -132,14 +158,21 @@ export class UsersController {
   @Post(':id/contacts')
   @RequirePermissions('users.edit_profile')
   @ApiOperation({ summary: 'Добавить контакт' })
-  addContact(@Param('id') id: string, @Body() dto: AddContactDto, @CurrentUser('id') adminId: string) {
+  addContact(
+    @Param('id') id: string,
+    @Body() dto: AddContactDto,
+    @CurrentUser('id') adminId: string,
+  ) {
     return this.usersService.addContact(id, dto, adminId);
   }
 
   @Delete('contacts/:contactId')
   @RequirePermissions('users.edit_profile')
   @ApiOperation({ summary: 'Удалить контакт' })
-  removeContact(@Param('contactId') contactId: string, @CurrentUser('id') adminId: string) {
+  removeContact(
+    @Param('contactId') contactId: string,
+    @CurrentUser('id') adminId: string,
+  ) {
     return this.usersService.removeContact(contactId, adminId);
   }
 
@@ -148,14 +181,21 @@ export class UsersController {
   @Post(':id/languages')
   @RequirePermissions('users.edit_profile')
   @ApiOperation({ summary: 'Добавить язык' })
-  addLanguage(@Param('id') id: string, @Body() dto: AddLanguageDto, @CurrentUser('id') adminId: string) {
+  addLanguage(
+    @Param('id') id: string,
+    @Body() dto: AddLanguageDto,
+    @CurrentUser('id') adminId: string,
+  ) {
     return this.usersService.addLanguage(id, dto, adminId);
   }
 
   @Delete('languages/:languageId')
   @RequirePermissions('users.edit_profile')
   @ApiOperation({ summary: 'Удалить язык' })
-  removeLanguage(@Param('languageId') languageId: string, @CurrentUser('id') adminId: string) {
+  removeLanguage(
+    @Param('languageId') languageId: string,
+    @CurrentUser('id') adminId: string,
+  ) {
     return this.usersService.removeLanguage(languageId, adminId);
   }
 
@@ -164,7 +204,11 @@ export class UsersController {
   @Patch(':id/citizenships')
   @RequirePermissions('users.edit_profile')
   @ApiOperation({ summary: 'Обновить гражданства' })
-  setCitizenships(@Param('id') id: string, @Body() dto: AddCitizenshipDto, @CurrentUser('id') adminId: string) {
+  setCitizenships(
+    @Param('id') id: string,
+    @Body() dto: AddCitizenshipDto,
+    @CurrentUser('id') adminId: string,
+  ) {
     return this.usersService.setCitizenships(id, dto, adminId);
   }
 
@@ -173,21 +217,33 @@ export class UsersController {
   @Post(':id/force-logout')
   @RequirePermissions('users.force_logout')
   @ApiOperation({ summary: 'Принудительный выход' })
-  forceLogout(@Param('id') id: string, @CurrentUser('id') adminId: string, @Req() req: Request) {
+  forceLogout(
+    @Param('id') id: string,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
+  ) {
     return this.authService.forceLogout(id, adminId, req.ip);
   }
 
   @Post(':id/block')
   @RequirePermissions('users.block')
   @ApiOperation({ summary: 'Заблокировать пользователя' })
-  block(@Param('id') id: string, @CurrentUser('id') adminId: string, @Req() req: Request) {
+  block(
+    @Param('id') id: string,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
+  ) {
     return this.authService.blockUser(id, adminId, req.ip);
   }
 
   @Post(':id/unblock')
   @RequirePermissions('users.block')
   @ApiOperation({ summary: 'Разблокировать пользователя' })
-  unblock(@Param('id') id: string, @CurrentUser('id') adminId: string, @Req() req: Request) {
+  unblock(
+    @Param('id') id: string,
+    @CurrentUser('id') adminId: string,
+    @Req() req: Request,
+  ) {
     return this.authService.unblockUser(id, adminId, req.ip);
   }
 }

@@ -1,9 +1,15 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import {
-  CreatePresentationTypeDto, UpdatePresentationTypeDto,
-  CreateVenueDto, UpdateVenueDto,
+  CreatePresentationTypeDto,
+  UpdatePresentationTypeDto,
+  CreateVenueDto,
+  UpdateVenueDto,
 } from './dto/directories.dto';
 
 @Injectable()
@@ -40,16 +46,27 @@ export class DirectoriesService {
     return type;
   }
 
-  async updatePresentationType(id: string, dto: UpdatePresentationTypeDto, userId: string) {
-    const type = await this.prisma.presentationType.findUnique({ where: { id } });
+  async updatePresentationType(
+    id: string,
+    dto: UpdatePresentationTypeDto,
+    userId: string,
+  ) {
+    const type = await this.prisma.presentationType.findUnique({
+      where: { id },
+    });
     if (!type) throw new NotFoundException('errors.presentationTypeNotFound');
 
     if (dto.name && dto.name !== type.name) {
-      const exists = await this.prisma.presentationType.findUnique({ where: { name: dto.name } });
+      const exists = await this.prisma.presentationType.findUnique({
+        where: { name: dto.name },
+      });
       if (exists) throw new ConflictException('errors.presentationTypeExists');
     }
 
-    const updated = await this.prisma.presentationType.update({ where: { id }, data: dto });
+    const updated = await this.prisma.presentationType.update({
+      where: { id },
+      data: dto,
+    });
 
     await this.auditService.log({
       userId,
@@ -63,12 +80,17 @@ export class DirectoriesService {
   }
 
   async deletePresentationType(id: string, userId: string) {
-    const type = await this.prisma.presentationType.findUnique({ where: { id } });
+    const type = await this.prisma.presentationType.findUnique({
+      where: { id },
+    });
     if (!type) throw new NotFoundException('errors.presentationTypeNotFound');
 
     // Check if in use
-    const usageCount = await this.prisma.presentation.count({ where: { typeId: id } });
-    if (usageCount > 0) throw new ConflictException('errors.presentationTypeInUse');
+    const usageCount = await this.prisma.presentation.count({
+      where: { typeId: id },
+    });
+    if (usageCount > 0)
+      throw new ConflictException('errors.presentationTypeInUse');
 
     await this.prisma.presentationType.delete({ where: { id } });
 
@@ -117,7 +139,10 @@ export class DirectoriesService {
     const venue = await this.prisma.venue.findUnique({ where: { id } });
     if (!venue) throw new NotFoundException('errors.venueNotFound');
 
-    const updated = await this.prisma.venue.update({ where: { id }, data: dto });
+    const updated = await this.prisma.venue.update({
+      where: { id },
+      data: dto,
+    });
 
     await this.auditService.log({
       userId,
@@ -134,7 +159,9 @@ export class DirectoriesService {
     const venue = await this.prisma.venue.findUnique({ where: { id } });
     if (!venue) throw new NotFoundException('errors.venueNotFound');
 
-    const usageCount = await this.prisma.presentation.count({ where: { venueId: id } });
+    const usageCount = await this.prisma.presentation.count({
+      where: { venueId: id },
+    });
     if (usageCount > 0) throw new ConflictException('errors.venueInUse');
 
     await this.prisma.venue.delete({ where: { id } });
