@@ -7,6 +7,17 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
+  // === 0. Remove deprecated permissions ===
+  const deprecated = ['trips.view', 'presentations.view'];
+  for (const slug of deprecated) {
+    const perm = await prisma.permission.findUnique({ where: { slug } });
+    if (perm) {
+      await prisma.rolePermission.deleteMany({ where: { permissionId: perm.id } });
+      await prisma.permission.delete({ where: { slug } });
+      console.log(`🗑️  Removed deprecated permission: ${slug}`);
+    }
+  }
+
   // === 1. Permissions ===
   const permissions = [
     // Users
