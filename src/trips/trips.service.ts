@@ -135,7 +135,11 @@ export class TripsService {
 
   async findAll(filter?: string, userId?: string, userPermissions?: string[]) {
     const hasViewAll = userPermissions?.includes('trips.view-all');
+    const hasViewPerson = userPermissions?.includes('trips.view-person');
     const isAdmin = userPermissions?.includes('trips.admin');
+
+    // Без хотя бы одного права на просмотр — ничего не показываем
+    if (!hasViewAll && !hasViewPerson) return [];
 
     // Границы «сегодня» для сравнения с датами
     const now = new Date();
