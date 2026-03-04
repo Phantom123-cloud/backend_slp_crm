@@ -122,13 +122,14 @@ export class PresentationsController {
   }
 
   @Post('presentations/:id/summary')
-  @RequirePermissions('presentations.edit')
+  @RequireAnyPermission('trips.admin', 'presentations.view-all', 'presentations.view-person')
   @ApiOperation({ summary: 'Сохранить итоги презентации' })
-  saveSummary(
+  async saveSummary(
     @Param('id') id: string,
     @Body() dto: SaveSummaryDto,
     @CurrentUser('id') userId: string,
   ) {
-    return this.presentationsService.saveSummary(id, dto, userId);
+    const permissions = await this.getUserPermissions(userId);
+    return this.presentationsService.saveSummary(id, dto, userId, permissions);
   }
 }

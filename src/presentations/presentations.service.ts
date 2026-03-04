@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -325,7 +326,36 @@ export class PresentationsService {
     });
   }
 
-  async saveSummary(id: string, dto: SaveSummaryDto, userId: string) {
+  async saveSummary(
+    id: string,
+    dto: SaveSummaryDto,
+    userId: string,
+    userPermissions: string[] = [],
+  ) {
+    const isAdmin = userPermissions.includes('trips.admin');
+    const hasViewPres =
+      userPermissions.includes('presentations.view-all') ||
+      userPermissions.includes('presentations.view-person');
+
+    if (!isAdmin) {
+      // Проверяем роль пользователя в составе поездки (GA или MV_GA)
+      const presentation = await this.prisma.presentation.findUnique({
+        where: { id },
+        select: {
+          trip: {
+            select: {
+              crew: { where: { userId }, select: { role: true } },
+            },
+          },
+        },
+      });
+      const myRole = presentation?.trip?.crew?.[0]?.role;
+      const isGa = myRole === 'GA' || myRole === 'MV_GA';
+      if (!hasViewPres || !isGa) {
+        throw new ForbiddenException('errors.forbidden');
+      }
+    }
+
     await this.findById(id);
 
     await this.prisma.$transaction(async (tx) => {
