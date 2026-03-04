@@ -53,6 +53,21 @@ export class UpdateUserProfileDto {
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()
+  firstName?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  lastName?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  middleName?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
   tradeCode?: string;
 
   @ApiPropertyOptional()
