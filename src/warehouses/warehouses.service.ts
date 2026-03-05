@@ -93,11 +93,22 @@ export class WarehousesService {
   }
 
   async create(dto: CreateWarehouseDto, userId: string) {
+    const owner = await this.prisma.user.findUnique({
+      where: { id: dto.ownerId },
+      select: { firstName: true, lastName: true },
+    });
+    if (!owner) throw new NotFoundException('Owner not found');
+
+    const name =
+      dto.type === 'CENTRAL'
+        ? `Центральный склад ${dto.name || ''}`
+        : `Склад ${owner.lastName} ${owner.firstName}`;
+
     return this.prisma.warehouse.create({
       data: {
-        name: dto.name,
+        name,
         type: dto.type as unknown as WarehouseType,
-        ownerId: dto.type === 'PERSONAL' ? dto.ownerId : undefined,
+        ownerId: dto.ownerId,
         createdById: userId,
       },
     });
@@ -106,7 +117,26 @@ export class WarehousesService {
   async update(id: string, dto: UpdateWarehouseDto) {
     const warehouse = await this.prisma.warehouse.findUnique({ where: { id } });
     if (!warehouse) throw new NotFoundException('Warehouse not found');
-    return this.prisma.warehouse.update({ where: { id }, data: dto });
+
+    let name = dto.name;
+
+    // For PERSONAL: if owner changes and no explicit name, auto-generate name
+    if (dto.ownerId && warehouse.type === WarehouseType.PERSONAL && !dto.name) {
+      const owner = await this.prisma.user.findUnique({
+        where: { id: dto.ownerId },
+        select: { firstName: true, lastName: true },
+      });
+      if (owner) name = `Склад ${owner.lastName} ${owner.firstName}`;
+    }
+
+    return this.prisma.warehouse.update({
+      where: { id },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(dto.ownerId !== undefined && { ownerId: dto.ownerId }),
+        ...(dto.isActive !== undefined && { isActive: dto.isActive }),
+      },
+    });
   }
 
   async remove(id: string) {

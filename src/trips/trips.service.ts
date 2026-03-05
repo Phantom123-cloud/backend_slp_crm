@@ -502,6 +502,18 @@ export class TripsService {
           })),
         });
       }
+
+      // Auto-set warehouse owner to MV (preferred) or MV_GA
+      const mvMember =
+        dto.crew.find((m) => m.role === 'MV') ||
+        dto.crew.find((m) => m.role === 'MV_GA');
+      if (mvMember) {
+        await tx.warehouse.updateMany({
+          where: { tripId, type: 'TRIP' },
+          data: { ownerId: mvMember.userId },
+        });
+      }
+
       // Auto-set coordinator from leader's coordinator
       if (coordinatorId) {
         await tx.trip.update({

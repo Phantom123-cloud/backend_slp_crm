@@ -27,19 +27,19 @@ export enum TransactionTypeDto {
 }
 
 export class CreateWarehouseDto {
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
   @MinLength(1)
-  name: string;
+  name?: string;
 
   @ApiProperty({ enum: WarehouseTypeDto })
   @IsEnum(WarehouseTypeDto)
   type: WarehouseTypeDto;
 
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiProperty()
   @IsString()
-  ownerId?: string;
+  ownerId: string;
 }
 
 export class UpdateWarehouseDto {
@@ -53,6 +53,11 @@ export class UpdateWarehouseDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  ownerId?: string;
 }
 
 export class TransactionItemDto {
