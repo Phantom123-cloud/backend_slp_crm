@@ -55,6 +55,10 @@ async function main() {
     { name: 'Удаление презентаций', slug: 'presentations.delete', group: 'presentations', description: 'Удаление/отмена презентаций' },
     // Directories
     { name: 'Управление справочниками', slug: 'directories.manage', group: 'directories', description: 'Управление типами презентаций и местами проведения' },
+    // Warehouses
+    { name: 'Просмотр складов', slug: 'warehouses.view', group: 'warehouses', description: 'Просмотр всех центральных и личных складов' },
+    { name: 'Создание складов', slug: 'warehouses.create', group: 'warehouses', description: 'Создание центральных и личных складов' },
+    { name: 'Управление складами', slug: 'warehouses.manage', group: 'warehouses', description: 'Полное управление всеми складами и товарами в справочнике' },
   ];
 
   const createdPerms: Record<string, string> = {};

@@ -275,7 +275,14 @@ export class TripsService {
         },
       });
 
-      await tx.warehouse.create({ data: { tripId: newTrip.id } });
+      await tx.warehouse.create({
+        data: {
+          name: `Склад ${dto.teamName}`,
+          type: 'TRIP',
+          tripId: newTrip.id,
+          createdById: userId,
+        },
+      });
       await tx.wallet.create({ data: { tripId: newTrip.id } });
 
       return newTrip;
