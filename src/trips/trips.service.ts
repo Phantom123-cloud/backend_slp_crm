@@ -14,7 +14,7 @@ import {
   SetTripCrewDto,
   UpdateCoordinatorDto,
 } from './dto/trips.dto';
-import { TripStatus } from '@prisma/client';
+import { TripStatus, TransferStatus } from '@prisma/client';
 
 @Injectable()
 export class TripsService {
@@ -354,6 +354,40 @@ export class TripsService {
 
   async updateStatus(id: string, dto: UpdateTripStatusDto, userId: string) {
     await this.getTrip(id);
+
+    // When closing a trip, validate warehouse is clear
+    if (dto.status === 'CLOSED') {
+      const warehouse = await this.prisma.warehouse.findUnique({
+        where: { tripId: id },
+        include: {
+          stock: true,
+        },
+      });
+
+      if (warehouse) {
+        // Check for non-zero stock
+        const nonZeroStock = warehouse.stock.filter(
+          (s) => Number(s.quantity) !== 0,
+        );
+        if (nonZeroStock.length > 0) {
+          throw new BadRequestException('errors.tripWarehouseNotEmpty');
+        }
+
+        // Check for pending transfers (either as sender or receiver)
+        const pendingTransfers = await this.prisma.transaction.findMany({
+          where: {
+            transferStatus: TransferStatus.PENDING,
+            OR: [
+              { fromWarehouseId: warehouse.id },
+              { toWarehouseId: warehouse.id },
+            ],
+          },
+        });
+        if (pendingTransfers.length > 0) {
+          throw new BadRequestException('errors.tripWarehousePendingTransfers');
+        }
+      }
+    }
 
     const updated = await this.prisma.trip.update({
       where: { id },
