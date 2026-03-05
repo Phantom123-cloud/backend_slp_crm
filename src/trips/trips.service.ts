@@ -277,7 +277,7 @@ export class TripsService {
 
       await tx.warehouse.create({
         data: {
-          name: `Склад ${dto.teamName}`,
+          name,
           type: 'TRIP',
           tripId: newTrip.id,
           createdById: userId,
