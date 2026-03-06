@@ -57,7 +57,7 @@ async function main() {
     { name: 'Управление справочниками', slug: 'directories.manage', group: 'directories', description: 'Управление типами презентаций и местами проведения' },
     // Warehouses
     { name: 'Просмотр всех складов', slug: 'warehouses.view-all', group: 'warehouses', description: 'Просмотр списка всех складов (выездных, центральных, личных) и переход внутрь любого склада' },
-    { name: 'Просмотр своих складов', slug: 'warehouses.view-person', group: 'warehouses', description: 'Просмотр складов, где пользователь назначен ответственным. Даёт право на транзакции по своим складам' },
+    { name: 'Просмотр своих складов', slug: 'warehouses.view-person', group: 'warehouses', description: 'Просмотр складов, где пользователь назначен ответственным. Даёт право на транзакции со своего склада, включая перемещение в любой другой незаблокированный склад' },
     { name: 'Создание складов', slug: 'warehouses.create', group: 'warehouses', description: 'Создание центральных и личных складов (выездной склад создаётся автоматически при создании поездки)' },
     { name: 'Управление складами', slug: 'warehouses.manage', group: 'warehouses', description: 'Полное управление всеми складами: просмотр, транзакции, блокировка, удаление, редактирование' },
   ];
@@ -66,7 +66,7 @@ async function main() {
   for (const p of permissions) {
     const perm = await prisma.permission.upsert({
       where: { slug: p.slug },
-      update: { name: p.name, group: p.group },
+      update: { name: p.name, group: p.group, description: p.description },
       create: p,
     });
     createdPerms[p.slug] = perm.id;
