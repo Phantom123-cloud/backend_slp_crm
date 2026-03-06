@@ -56,11 +56,11 @@ async function main() {
     // Directories
     { name: 'Управление справочниками', slug: 'directories.manage', group: 'directories', description: 'Управление типами презентаций и местами проведения' },
     // Warehouses
-    { name: 'Просмотр всех складов', slug: 'warehouses.view-all', group: 'warehouses', description: 'Просмотр списка всех складов (выездных, центральных, личных) и переход внутрь любого склада' },
-    { name: 'Просмотр своих складов', slug: 'warehouses.view-person', group: 'warehouses', description: 'Просмотр складов, где пользователь назначен ответственным (центральных и личных — по полю владельца; выездных — по роли МВ/МВ_ГА в составе). Только просмотр, без права на транзакции' },
-    { name: 'Создание складов', slug: 'warehouses.create', group: 'warehouses', description: 'Создание центральных и личных складов (выездной склад создаётся автоматически при создании поездки)' },
-    { name: 'Транзакции по своим складам', slug: 'warehouses.transaction', group: 'warehouses', description: 'Управление транзакциями на складах, где пользователь назначен ответственным (центральных/личных — по владельцу; выездных — МВ/МВ_ГА). Включает просмотр и создание приходов, перемещений' },
-    { name: 'Управление складами', slug: 'warehouses.manage', group: 'warehouses', description: 'Полное управление всеми складами: просмотр, транзакции, блокировка, удаление, редактирование' },
+    { name: 'Просмотр всех складов', slug: 'warehouses.view-all', group: 'warehouses', description: 'Просмотр всех складов в системе' },
+    { name: 'Просмотр своих складов', slug: 'warehouses.view-person', group: 'warehouses', description: 'Просмотр складов, где назначен ответственным (только просмотр)' },
+    { name: 'Создание складов', slug: 'warehouses.create', group: 'warehouses', description: 'Создание центральных и личных складов' },
+    { name: 'Транзакции по своим складам', slug: 'warehouses.transaction', group: 'warehouses', description: 'Транзакции на складах, где назначен ответственным' },
+    { name: 'Управление складами', slug: 'warehouses.manage', group: 'warehouses', description: 'Полное управление всеми складами' },
   ];
 
   const createdPerms: Record<string, string> = {};
