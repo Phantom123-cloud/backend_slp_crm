@@ -422,15 +422,12 @@ export class WarehousesService {
       return;
     }
 
-    // TRIP warehouse: trips.view-* + MV/MV_GA crew → OK
-    if (warehouse.type === 'TRIP' && warehouse.tripId) {
-      const hasTripsView = perms.includes('trips.view-person') || perms.includes('trips.view-all');
-      if (hasTripsView) {
-        const crew = await this.prisma.tripCrew.findFirst({
-          where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
-        });
-        if (crew) return;
-      }
+    // warehouses.transaction + MV/MV_GA crew → TRIP warehouse view OK
+    if (perms.includes('warehouses.transaction') && warehouse.type === 'TRIP' && warehouse.tripId) {
+      const crew = await this.prisma.tripCrew.findFirst({
+        where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
+      });
+      if (crew) return;
     }
 
     throw new ForbiddenException();
@@ -452,15 +449,12 @@ export class WarehousesService {
       return;
     }
 
-    // TRIP warehouse: trips.view-* + MV/MV_GA → can transact
-    if (warehouse.type === 'TRIP' && warehouse.tripId) {
-      const hasTripsView = perms.includes('trips.view-person') || perms.includes('trips.view-all');
-      if (hasTripsView) {
-        const crew = await this.prisma.tripCrew.findFirst({
-          where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
-        });
-        if (crew) return;
-      }
+    // warehouses.transaction + MV/MV_GA crew → TRIP warehouse transact OK
+    if (perms.includes('warehouses.transaction') && warehouse.type === 'TRIP' && warehouse.tripId) {
+      const crew = await this.prisma.tripCrew.findFirst({
+        where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
+      });
+      if (crew) return;
     }
 
     throw new ForbiddenException();

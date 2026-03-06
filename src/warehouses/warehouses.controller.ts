@@ -37,7 +37,7 @@ export class WarehousesController {
   @Get(':id')
   @RequireAnyPermission(
     'warehouses.view-all', 'warehouses.view-person', 'warehouses.manage',
-    'trips.admin', 'trips.view-person', 'trips.view-all',
+    'warehouses.transaction', 'trips.admin',
   )
   @ApiOperation({ summary: 'Детальная страница склада' })
   findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
@@ -82,7 +82,7 @@ export class WarehousesController {
   @Get(':id/transactions')
   @RequireAnyPermission(
     'warehouses.view-all', 'warehouses.view-person', 'warehouses.manage',
-    'trips.admin', 'trips.view-person', 'trips.view-all',
+    'warehouses.transaction', 'trips.admin',
   )
   @ApiOperation({ summary: 'История транзакций склада' })
   getTransactions(@Param('id') id: string, @CurrentUser('id') userId: string) {
@@ -92,7 +92,7 @@ export class WarehousesController {
   @Post(':id/transactions')
   @RequireAnyPermission(
     'warehouses.manage', 'warehouses.view-person',
-    'trips.admin', 'trips.view-person', 'trips.view-all',
+    'warehouses.transaction', 'trips.admin',
   )
   @ApiOperation({ summary: 'Создать транзакцию' })
   createTransaction(
@@ -106,7 +106,7 @@ export class WarehousesController {
   @Post('transfers/:txId/accept')
   @RequireAnyPermission(
     'warehouses.manage', 'warehouses.view-person',
-    'trips.admin', 'trips.view-person', 'trips.view-all',
+    'warehouses.transaction', 'trips.admin',
   )
   @ApiOperation({ summary: 'Принять ожидающий перевод' })
   acceptTransfer(@Param('txId') txId: string, @CurrentUser('id') userId: string) {
@@ -116,7 +116,7 @@ export class WarehousesController {
   @Post('transfers/:txId/cancel')
   @RequireAnyPermission(
     'warehouses.manage', 'warehouses.view-person',
-    'trips.admin', 'trips.view-person', 'trips.view-all',
+    'warehouses.transaction', 'trips.admin',
   )
   @ApiOperation({ summary: 'Отменить ожидающий перевод' })
   cancelTransfer(@Param('txId') txId: string, @CurrentUser('id') userId: string) {
