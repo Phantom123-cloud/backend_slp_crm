@@ -28,7 +28,7 @@ export class WarehousesController {
   constructor(private warehousesService: WarehousesService) {}
 
   @Get()
-  @RequireAnyPermission('warehouses.view-all', 'warehouses.view-person', 'warehouses.manage')
+  @RequireAnyPermission('warehouses.view-all', 'warehouses.view-person', 'warehouses.manage', 'warehouses.transaction')
   @ApiOperation({ summary: 'Список складов (фильтруется по правам)' })
   findAll(@CurrentUser('id') userId: string) {
     return this.warehousesService.findAll(userId);
@@ -90,10 +90,7 @@ export class WarehousesController {
   }
 
   @Post(':id/transactions')
-  @RequireAnyPermission(
-    'warehouses.manage', 'warehouses.view-person',
-    'warehouses.transaction', 'trips.admin',
-  )
+  @RequireAnyPermission('warehouses.manage', 'warehouses.transaction', 'trips.admin')
   @ApiOperation({ summary: 'Создать транзакцию' })
   createTransaction(
     @Param('id') id: string,
@@ -104,20 +101,14 @@ export class WarehousesController {
   }
 
   @Post('transfers/:txId/accept')
-  @RequireAnyPermission(
-    'warehouses.manage', 'warehouses.view-person',
-    'warehouses.transaction', 'trips.admin',
-  )
+  @RequireAnyPermission('warehouses.manage', 'warehouses.transaction', 'trips.admin')
   @ApiOperation({ summary: 'Принять ожидающий перевод' })
   acceptTransfer(@Param('txId') txId: string, @CurrentUser('id') userId: string) {
     return this.warehousesService.acceptTransfer(txId, userId);
   }
 
   @Post('transfers/:txId/cancel')
-  @RequireAnyPermission(
-    'warehouses.manage', 'warehouses.view-person',
-    'warehouses.transaction', 'trips.admin',
-  )
+  @RequireAnyPermission('warehouses.manage', 'warehouses.transaction', 'trips.admin')
   @ApiOperation({ summary: 'Отменить ожидающий перевод' })
   cancelTransfer(@Param('txId') txId: string, @CurrentUser('id') userId: string) {
     return this.warehousesService.cancelTransfer(txId, userId);

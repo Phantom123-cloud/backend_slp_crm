@@ -45,6 +45,7 @@ export class WarehousesService {
     const canManage = perms.includes('warehouses.manage');
     const canViewAll = perms.includes('warehouses.view-all');
     const canViewPerson = perms.includes('warehouses.view-person');
+    const canTransaction = perms.includes('warehouses.transaction');
 
     // warehouses.manage or view-all → see ALL warehouses (TRIP + CENTRAL + PERSONAL)
     if (canManage || canViewAll) {
@@ -54,13 +55,26 @@ export class WarehousesService {
       });
     }
 
-    // view-person → own non-trip warehouses (ownerId === userId)
-    if (canViewPerson) {
-      return this.prisma.warehouse.findMany({
-        where: { ownerId: userId, type: { not: WarehouseType.TRIP } },
-        include: this.warehouseListInclude(),
-        orderBy: { createdAt: 'desc' },
-      });
+    // view-person or transaction → own warehouses (all 3 types where responsible)
+    if (canViewPerson || canTransaction) {
+      const [ownWarehouses, tripWarehouses] = await Promise.all([
+        // CENTRAL/PERSONAL where ownerId === userId
+        this.prisma.warehouse.findMany({
+          where: { ownerId: userId, type: { not: WarehouseType.TRIP } },
+          include: this.warehouseListInclude(),
+          orderBy: { createdAt: 'desc' },
+        }),
+        // TRIP warehouses where user is MV/MV_GA crew
+        this.prisma.warehouse.findMany({
+          where: {
+            type: WarehouseType.TRIP,
+            trip: { crew: { some: { userId, role: { in: ['MV', 'MV_GA'] } } } },
+          },
+          include: this.warehouseListInclude(),
+          orderBy: { createdAt: 'desc' },
+        }),
+      ]);
+      return [...ownWarehouses, ...tripWarehouses];
     }
 
     return [];
@@ -417,17 +431,19 @@ export class WarehousesService {
       return;
     }
 
-    // view-person + owner of this warehouse → OK
-    if (perms.includes('warehouses.view-person') && warehouse.ownerId === userId) {
-      return;
-    }
-
-    // warehouses.transaction + MV/MV_GA crew → TRIP warehouse view OK
-    if (perms.includes('warehouses.transaction') && warehouse.type === 'TRIP' && warehouse.tripId) {
-      const crew = await this.prisma.tripCrew.findFirst({
-        where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
-      });
-      if (crew) return;
+    // view-person or transaction → see where responsible (all 3 types)
+    const canViewPerson = perms.includes('warehouses.view-person');
+    const canTransaction = perms.includes('warehouses.transaction');
+    if (canViewPerson || canTransaction) {
+      // CENTRAL/PERSONAL: ownerId match
+      if (warehouse.type !== 'TRIP' && warehouse.ownerId === userId) return;
+      // TRIP: MV/MV_GA crew
+      if (warehouse.type === 'TRIP' && warehouse.tripId) {
+        const crew = await this.prisma.tripCrew.findFirst({
+          where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
+        });
+        if (crew) return;
+      }
     }
 
     throw new ForbiddenException();
@@ -439,22 +455,22 @@ export class WarehousesService {
   ) {
     const perms = await this.getUserPerms(userId);
 
-    // Full manage → OK
+    // Full manage → OK on any warehouse
     if (perms.includes('warehouses.manage') || perms.includes('trips.admin')) {
       return;
     }
 
-    // view-person + owner → can transact on own warehouse
-    if (perms.includes('warehouses.view-person') && warehouse.ownerId === userId) {
-      return;
-    }
-
-    // warehouses.transaction + MV/MV_GA crew → TRIP warehouse transact OK
-    if (perms.includes('warehouses.transaction') && warehouse.type === 'TRIP' && warehouse.tripId) {
-      const crew = await this.prisma.tripCrew.findFirst({
-        where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
-      });
-      if (crew) return;
+    // transaction → transact where responsible (all 3 types)
+    if (perms.includes('warehouses.transaction')) {
+      // CENTRAL/PERSONAL: ownerId match
+      if (warehouse.type !== 'TRIP' && warehouse.ownerId === userId) return;
+      // TRIP: MV/MV_GA crew
+      if (warehouse.type === 'TRIP' && warehouse.tripId) {
+        const crew = await this.prisma.tripCrew.findFirst({
+          where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
+        });
+        if (crew) return;
+      }
     }
 
     throw new ForbiddenException();
