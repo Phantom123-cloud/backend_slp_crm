@@ -11,7 +11,7 @@ import {
   CreateTransactionDto,
   TransactionTypeDto,
 } from './dto/warehouses.dto';
-import { TransactionType, WarehouseType } from '@prisma/client';
+import { TransactionType, TransferStatus, WarehouseType } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
@@ -27,6 +27,13 @@ export class WarehousesService {
 
   // ==================== WAREHOUSES ====================
 
+  private warehouseListInclude() {
+    return {
+      _count: { select: { stock: true, outgoing: true, incoming: true } },
+      owner: { select: { id: true, firstName: true, lastName: true } },
+    };
+  }
+
   async findAll(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -35,40 +42,25 @@ export class WarehousesService {
     if (!user) throw new ForbiddenException();
     const perms = this.getUserPermissions(user);
 
-    const canViewAll = perms.includes('warehouses.view') || perms.includes('warehouses.manage');
-    const canViewTrips = perms.includes('trips.admin') || perms.includes('trips.view-person');
+    const canManage = perms.includes('warehouses.manage');
+    const canViewAll = perms.includes('warehouses.view-all');
+    const canViewPerson = perms.includes('warehouses.view-person');
 
-    if (canViewAll && perms.includes('trips.admin')) {
-      // See everything
+    // warehouses.manage or view-all → see ALL warehouses (TRIP + CENTRAL + PERSONAL)
+    if (canManage || canViewAll) {
       return this.prisma.warehouse.findMany({
-        include: { _count: { select: { stock: true } }, owner: { select: { id: true, firstName: true, lastName: true } } },
+        include: this.warehouseListInclude(),
         orderBy: { createdAt: 'desc' },
       });
     }
 
-    if (canViewAll) {
-      // See CENTRAL + PERSONAL, but TRIP only if trips.admin
-      const whereClause: any = perms.includes('trips.admin')
-        ? {}
-        : { type: { not: WarehouseType.TRIP } };
+    // view-person → own non-trip warehouses (ownerId === userId)
+    if (canViewPerson) {
       return this.prisma.warehouse.findMany({
-        where: whereClause,
-        include: { _count: { select: { stock: true } }, owner: { select: { id: true, firstName: true, lastName: true } } },
+        where: { ownerId: userId, type: { not: WarehouseType.TRIP } },
+        include: this.warehouseListInclude(),
         orderBy: { createdAt: 'desc' },
       });
-    }
-
-    // No warehouses.view — only TRIP warehouses where user is MV/MV_GA crew
-    if (canViewTrips) {
-      const tripWarehouses = await this.prisma.warehouse.findMany({
-        where: {
-          type: WarehouseType.TRIP,
-          trip: { crew: { some: { userId, role: { in: ['MV', 'MV_GA'] } } } },
-        },
-        include: { _count: { select: { stock: true } }, owner: { select: { id: true, firstName: true, lastName: true } } },
-        orderBy: { createdAt: 'desc' },
-      });
-      return tripWarehouses;
     }
 
     return [];
@@ -139,10 +131,46 @@ export class WarehousesService {
     });
   }
 
+  async deactivate(id: string) {
+    const warehouse = await this.prisma.warehouse.findUnique({
+      where: { id },
+      include: { stock: true },
+    });
+    if (!warehouse) throw new NotFoundException('Warehouse not found');
+
+    const nonZeroStock = warehouse.stock.filter((s) => Number(s.quantity) !== 0);
+    if (nonZeroStock.length > 0)
+      throw new BadRequestException('errors.warehouseNotEmpty');
+
+    const pendingTransfers = await this.prisma.transaction.count({
+      where: {
+        transferStatus: TransferStatus.PENDING,
+        OR: [{ fromWarehouseId: id }, { toWarehouseId: id }],
+      },
+    });
+    if (pendingTransfers > 0)
+      throw new BadRequestException('errors.warehousePendingTransfers');
+
+    return this.prisma.warehouse.update({ where: { id }, data: { isActive: false } });
+  }
+
+  async reactivate(id: string) {
+    const warehouse = await this.prisma.warehouse.findUnique({ where: { id } });
+    if (!warehouse) throw new NotFoundException('Warehouse not found');
+    return this.prisma.warehouse.update({ where: { id }, data: { isActive: true } });
+  }
+
   async remove(id: string) {
     const warehouse = await this.prisma.warehouse.findUnique({ where: { id } });
     if (!warehouse) throw new NotFoundException('Warehouse not found');
-    return this.prisma.warehouse.update({ where: { id }, data: { isActive: false } });
+
+    const txCount = await this.prisma.transaction.count({
+      where: { OR: [{ fromWarehouseId: id }, { toWarehouseId: id }] },
+    });
+    if (txCount > 0)
+      throw new BadRequestException('errors.warehouseHasTransactions');
+
+    return this.prisma.warehouse.delete({ where: { id } });
   }
 
   // ==================== TRANSACTIONS ====================
@@ -162,6 +190,8 @@ export class WarehousesService {
       include: {
         items: { include: { product: true } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
+        fromWarehouse: { select: { id: true, name: true } },
+        toWarehouse: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -183,11 +213,13 @@ export class WarehousesService {
 
       const pairId = uuidv4();
       return this.prisma.$transaction(async (tx) => {
-        // TRANSFER_OUT from source
+        // TRANSFER_OUT with PENDING status — stores both sender and receiver
         const outTx = await tx.transaction.create({
           data: {
             type: TransactionType.TRANSFER_OUT,
             fromWarehouseId: warehouseId,
+            toWarehouseId: dto.toWarehouseId,   // destination stored here too
+            transferStatus: TransferStatus.PENDING,
             note: dto.note,
             pairId,
             createdById: userId,
@@ -198,10 +230,15 @@ export class WarehousesService {
               })),
             },
           },
-          include: { items: { include: { product: true } }, createdBy: { select: { id: true, firstName: true, lastName: true } } },
+          include: {
+            items: { include: { product: true } },
+            createdBy: { select: { id: true, firstName: true, lastName: true } },
+            fromWarehouse: { select: { id: true, name: true } },
+            toWarehouse: { select: { id: true, name: true } },
+          },
         });
 
-        // Update stock (decrement source)
+        // Deduct stock from sender immediately
         for (const item of dto.items) {
           await tx.stock.upsert({
             where: { warehouseId_productId: { warehouseId, productId: item.productId } },
@@ -210,32 +247,7 @@ export class WarehousesService {
           });
         }
 
-        // TRANSFER_IN to destination
-        await tx.transaction.create({
-          data: {
-            type: TransactionType.TRANSFER_IN,
-            toWarehouseId: dto.toWarehouseId,
-            note: dto.note,
-            pairId,
-            createdById: userId,
-            items: {
-              create: dto.items.map((item) => ({
-                productId: item.productId,
-                quantity: item.quantity,
-              })),
-            },
-          },
-        });
-
-        // Update stock (increment destination)
-        for (const item of dto.items) {
-          await tx.stock.upsert({
-            where: { warehouseId_productId: { warehouseId: dto.toWarehouseId!, productId: item.productId } },
-            create: { warehouseId: dto.toWarehouseId!, productId: item.productId, quantity: item.quantity },
-            update: { quantity: { increment: item.quantity } },
-          });
-        }
-
+        // TRANSFER_IN is NOT created yet — waiting for receiver to accept
         return outTx;
       });
     }
@@ -281,47 +293,174 @@ export class WarehousesService {
     });
   }
 
+  // ==================== Transfer accept / cancel ====================
+
+  async acceptTransfer(txId: string, userId: string) {
+    const outTx = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      include: { items: true },
+    });
+    if (!outTx) throw new NotFoundException('Transfer not found');
+    if (outTx.type !== TransactionType.TRANSFER_OUT)
+      throw new BadRequestException('Not a transfer');
+    if (outTx.transferStatus !== TransferStatus.PENDING)
+      throw new BadRequestException('Transfer is not pending');
+    if (!outTx.toWarehouseId) throw new BadRequestException('Transfer has no destination');
+
+    // Only receiver's warehouse manager can accept
+    const toWarehouse = await this.prisma.warehouse.findUnique({ where: { id: outTx.toWarehouseId } });
+    if (!toWarehouse) throw new NotFoundException('Destination warehouse not found');
+    await this.checkTransactAccess(toWarehouse, userId);
+
+    return this.prisma.$transaction(async (tx) => {
+      // Create TRANSFER_IN record (receiver's history)
+      await tx.transaction.create({
+        data: {
+          type: TransactionType.TRANSFER_IN,
+          fromWarehouseId: outTx.fromWarehouseId,
+          toWarehouseId: outTx.toWarehouseId,
+          note: outTx.note,
+          pairId: outTx.pairId,
+          createdById: userId,
+          items: {
+            create: outTx.items.map((item) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+            })),
+          },
+        },
+      });
+
+      // Add stock to receiver
+      for (const item of outTx.items) {
+        await tx.stock.upsert({
+          where: { warehouseId_productId: { warehouseId: outTx.toWarehouseId!, productId: item.productId } },
+          create: { warehouseId: outTx.toWarehouseId!, productId: item.productId, quantity: item.quantity },
+          update: { quantity: { increment: item.quantity } },
+        });
+      }
+
+      // Mark TRANSFER_OUT as COMPLETED
+      return tx.transaction.update({
+        where: { id: txId },
+        data: { transferStatus: TransferStatus.COMPLETED },
+        include: {
+          items: { include: { product: true } },
+          createdBy: { select: { id: true, firstName: true, lastName: true } },
+          fromWarehouse: { select: { id: true, name: true } },
+          toWarehouse: { select: { id: true, name: true } },
+        },
+      });
+    });
+  }
+
+  async cancelTransfer(txId: string, userId: string) {
+    const outTx = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      include: { items: true },
+    });
+    if (!outTx) throw new NotFoundException('Transfer not found');
+    if (outTx.type !== TransactionType.TRANSFER_OUT)
+      throw new BadRequestException('Not a transfer');
+    if (outTx.transferStatus !== TransferStatus.PENDING)
+      throw new BadRequestException('Transfer is not pending');
+    if (!outTx.fromWarehouseId) throw new BadRequestException('Transfer has no source');
+
+    // Only sender's warehouse manager can cancel
+    const fromWarehouse = await this.prisma.warehouse.findUnique({ where: { id: outTx.fromWarehouseId } });
+    if (!fromWarehouse) throw new NotFoundException('Source warehouse not found');
+    await this.checkTransactAccess(fromWarehouse, userId);
+
+    return this.prisma.$transaction(async (tx) => {
+      // Return stock to sender
+      for (const item of outTx.items) {
+        await tx.stock.upsert({
+          where: { warehouseId_productId: { warehouseId: outTx.fromWarehouseId!, productId: item.productId } },
+          create: { warehouseId: outTx.fromWarehouseId!, productId: item.productId, quantity: item.quantity },
+          update: { quantity: { increment: item.quantity } },
+        });
+      }
+
+      // Mark TRANSFER_OUT as CANCELLED
+      return tx.transaction.update({
+        where: { id: txId },
+        data: { transferStatus: TransferStatus.CANCELLED },
+        include: {
+          items: { include: { product: true } },
+          createdBy: { select: { id: true, firstName: true, lastName: true } },
+          fromWarehouse: { select: { id: true, name: true } },
+          toWarehouse: { select: { id: true, name: true } },
+        },
+      });
+    });
+  }
+
   // ==================== Access helpers ====================
 
-  private async checkViewAccess(warehouse: { id: string; type: string; tripId?: string | null }, userId: string) {
+  private async getUserPerms(userId: string): Promise<string[]> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { role: { include: { permissions: { include: { permission: true } } } } },
     });
     if (!user) throw new ForbiddenException();
-    const perms = this.getUserPermissions(user);
+    return this.getUserPermissions(user);
+  }
 
-    if (perms.includes('warehouses.manage') || perms.includes('warehouses.view') || perms.includes('trips.admin')) {
+  private async checkViewAccess(
+    warehouse: { id: string; type: string; tripId?: string | null; ownerId?: string | null },
+    userId: string,
+  ) {
+    const perms = await this.getUserPerms(userId);
+
+    // Full manage or view-all → always OK
+    if (perms.includes('warehouses.manage') || perms.includes('warehouses.view-all') || perms.includes('trips.admin')) {
       return;
     }
 
-    if (warehouse.type === 'TRIP' && warehouse.tripId && perms.includes('trips.view-person')) {
-      const crew = await this.prisma.tripCrew.findFirst({
-        where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
-      });
-      if (crew) return;
+    // view-person + owner of this warehouse → OK
+    if (perms.includes('warehouses.view-person') && warehouse.ownerId === userId) {
+      return;
+    }
+
+    // TRIP warehouse: trips.view-* + MV/MV_GA crew → OK
+    if (warehouse.type === 'TRIP' && warehouse.tripId) {
+      const hasTripsView = perms.includes('trips.view-person') || perms.includes('trips.view-all');
+      if (hasTripsView) {
+        const crew = await this.prisma.tripCrew.findFirst({
+          where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
+        });
+        if (crew) return;
+      }
     }
 
     throw new ForbiddenException();
   }
 
-  async checkTransactAccess(warehouse: { id: string; type: string; tripId?: string | null }, userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { role: { include: { permissions: { include: { permission: true } } } } },
-    });
-    if (!user) throw new ForbiddenException();
-    const perms = this.getUserPermissions(user);
+  async checkTransactAccess(
+    warehouse: { id: string; type: string; tripId?: string | null; ownerId?: string | null },
+    userId: string,
+  ) {
+    const perms = await this.getUserPerms(userId);
 
+    // Full manage → OK
     if (perms.includes('warehouses.manage') || perms.includes('trips.admin')) {
       return;
     }
 
+    // view-person + owner → can transact on own warehouse
+    if (perms.includes('warehouses.view-person') && warehouse.ownerId === userId) {
+      return;
+    }
+
+    // TRIP warehouse: trips.view-* + MV/MV_GA → can transact
     if (warehouse.type === 'TRIP' && warehouse.tripId) {
-      const crew = await this.prisma.tripCrew.findFirst({
-        where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
-      });
-      if (crew) return;
+      const hasTripsView = perms.includes('trips.view-person') || perms.includes('trips.view-all');
+      if (hasTripsView) {
+        const crew = await this.prisma.tripCrew.findFirst({
+          where: { tripId: warehouse.tripId, userId, role: { in: ['MV', 'MV_GA'] } },
+        });
+        if (crew) return;
+      }
     }
 
     throw new ForbiddenException();

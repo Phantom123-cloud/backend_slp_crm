@@ -8,7 +8,7 @@ async function main() {
   console.log('🌱 Seeding database...');
 
   // === 0. Remove deprecated permissions ===
-  const deprecated = ['trips.view', 'presentations.view'];
+  const deprecated = ['trips.view', 'presentations.view', 'warehouses.view'];
   for (const slug of deprecated) {
     const perm = await prisma.permission.findUnique({ where: { slug } });
     if (perm) {
@@ -56,9 +56,10 @@ async function main() {
     // Directories
     { name: 'Управление справочниками', slug: 'directories.manage', group: 'directories', description: 'Управление типами презентаций и местами проведения' },
     // Warehouses
-    { name: 'Просмотр складов', slug: 'warehouses.view', group: 'warehouses', description: 'Просмотр всех центральных и личных складов' },
-    { name: 'Создание складов', slug: 'warehouses.create', group: 'warehouses', description: 'Создание центральных и личных складов' },
-    { name: 'Управление складами', slug: 'warehouses.manage', group: 'warehouses', description: 'Полное управление всеми складами и товарами в справочнике' },
+    { name: 'Просмотр всех складов', slug: 'warehouses.view-all', group: 'warehouses', description: 'Просмотр списка всех складов (выездных, центральных, личных) и переход внутрь любого склада' },
+    { name: 'Просмотр своих складов', slug: 'warehouses.view-person', group: 'warehouses', description: 'Просмотр складов, где пользователь назначен ответственным. Даёт право на транзакции по своим складам' },
+    { name: 'Создание складов', slug: 'warehouses.create', group: 'warehouses', description: 'Создание центральных и личных складов (выездной склад создаётся автоматически при создании поездки)' },
+    { name: 'Управление складами', slug: 'warehouses.manage', group: 'warehouses', description: 'Полное управление всеми складами: просмотр, транзакции, блокировка, удаление, редактирование' },
   ];
 
   const createdPerms: Record<string, string> = {};

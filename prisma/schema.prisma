@@ -371,6 +371,12 @@ enum TransactionType {
   TRANSFER_IN
 }
 
+enum TransferStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
 model Warehouse {
   id          String        @id @default(uuid())
   name        String
@@ -425,6 +431,7 @@ model Transaction {
   toWarehouseId   String?
   note            String?
   pairId          String?
+  transferStatus  TransferStatus?
   createdById     String
   createdAt       DateTime        @default(now())
 
@@ -436,6 +443,7 @@ model Transaction {
   @@index([fromWarehouseId])
   @@index([toWarehouseId])
   @@index([pairId])
+  @@index([transferStatus])
   @@index([createdAt])
   @@map("transactions")
 }
