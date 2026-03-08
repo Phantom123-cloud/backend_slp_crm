@@ -284,6 +284,43 @@ export class WalletsService {
     });
   }
 
+  async expense(walletId: string, dto: IncomeDto, userId: string) {
+    const wallet = await this.prisma.wallet.findUnique({ where: { id: walletId } });
+    if (!wallet) throw new NotFoundException('Wallet not found');
+    await this.checkTransactAccess(wallet, userId);
+
+    if (dto.images && dto.images.length > 15) {
+      throw new BadRequestException('errors.tooManyImages');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const walletTx = await tx.walletTx.create({
+        data: {
+          walletId,
+          type: WalletTxType.EXPENSE,
+          currency: dto.currency,
+          amount: dto.amount,
+          expenseTypeId: dto.expenseTypeId,
+          description: dto.description,
+          createdById: userId,
+          images: dto.images?.length
+            ? { create: dto.images.map((url) => ({ url, filename: url.split('/').pop() })) }
+            : undefined,
+        },
+        include: { images: true, expenseType: true },
+      });
+
+      // Уменьшаем баланс по валюте
+      await tx.walletBalance.upsert({
+        where: { walletId_currency: { walletId, currency: dto.currency } },
+        create: { walletId, currency: dto.currency, amount: -dto.amount },
+        update: { amount: { decrement: dto.amount } },
+      });
+
+      return walletTx;
+    });
+  }
+
   async transfer(walletId: string, dto: TransferDto, userId: string) {
     const fromWallet = await this.prisma.wallet.findUnique({ where: { id: walletId } });
     if (!fromWallet) throw new NotFoundException('Source wallet not found');

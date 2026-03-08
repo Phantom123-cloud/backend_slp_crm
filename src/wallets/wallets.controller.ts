@@ -100,6 +100,17 @@ export class WalletsController {
     return this.walletsService.income(id, dto, userId);
   }
 
+  @Post(':id/expense')
+  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit')
+  @ApiOperation({ summary: 'Внести расход средств' })
+  expense(
+    @Param('id') id: string,
+    @Body() dto: IncomeDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.walletsService.expense(id, dto, userId);
+  }
+
   @Post(':id/transfer')
   @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit')
   @ApiOperation({ summary: 'Перевод между кошельками' })

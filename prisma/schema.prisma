@@ -475,6 +475,7 @@ enum WalletType {
 
 enum WalletTxType {
   INCOME       // Приход средств
+  EXPENSE      // Расход средств
   TRANSFER_OUT // Исходящий перевод
   TRANSFER_IN  // Входящий перевод
   CONVERSION   // Конвертация валюты
