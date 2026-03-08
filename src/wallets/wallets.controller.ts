@@ -20,6 +20,7 @@ import {
   IncomeDto,
   TransferDto,
   ConversionDto,
+  UpdateTransactionDto,
 } from './dto/wallets.dto';
 
 @ApiTags('Wallets')
@@ -131,6 +132,17 @@ export class WalletsController {
     @CurrentUser('id') userId: string,
   ) {
     return this.walletsService.conversion(id, dto, userId);
+  }
+
+  @Patch('transactions/:txId')
+  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit')
+  @ApiOperation({ summary: 'Обновить транзакцию (описание, тип расхода, фото)' })
+  updateTransaction(
+    @Param('txId') txId: string,
+    @Body() dto: UpdateTransactionDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.walletsService.updateTransaction(txId, dto, userId);
   }
 
   @Post('transactions/:txId/close')

@@ -32,6 +32,14 @@ export class TransferDto {
   @ApiPropertyOptional({ type: [String] }) @IsOptional() images?: string[];
 }
 
+export class UpdateTransactionDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() description?: string;
+  /** null — снять тип расхода, string — установить */
+  @ApiPropertyOptional() @IsOptional() expenseTypeId?: string | null;
+  /** Полная замена списка изображений (URL-ы). Если не передаётся — фото не меняются */
+  @ApiPropertyOptional({ type: [String] }) @IsOptional() images?: string[];
+}
+
 export class ConversionDto {
   @ApiProperty() @IsString() fromCurrency: string;
   @ApiProperty() @IsNumber() @IsPositive() fromAmount: number;

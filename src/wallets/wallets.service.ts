@@ -11,6 +11,7 @@ import {
   IncomeDto,
   TransferDto,
   ConversionDto,
+  UpdateTransactionDto,
 } from './dto/wallets.dto';
 import { WalletType, WalletTxType } from '@prisma/client';
 
@@ -461,6 +462,46 @@ export class WalletsService {
       });
 
       return walletTx;
+    });
+  }
+
+  async updateTransaction(txId: string, dto: UpdateTransactionDto, userId: string) {
+    const tx = await this.prisma.walletTx.findUnique({
+      where: { id: txId },
+      include: { wallet: true },
+    });
+    if (!tx) throw new NotFoundException('Transaction not found');
+    if (tx.isClosed) throw new BadRequestException('errors.transactionClosed');
+    await this.checkTransactAccess(tx.wallet, userId);
+
+    if (dto.images !== undefined && dto.images.length > 15) {
+      throw new BadRequestException('errors.tooManyImages');
+    }
+
+    return this.prisma.$transaction(async (prismaTx) => {
+      // Полная замена изображений, если переданы
+      if (dto.images !== undefined) {
+        await prismaTx.walletTxImage.deleteMany({ where: { txId } });
+        if (dto.images.length > 0) {
+          await prismaTx.walletTxImage.createMany({
+            data: dto.images.map((url) => ({ txId, url, filename: url.split('/').pop() })),
+          });
+        }
+      }
+
+      return prismaTx.walletTx.update({
+        where: { id: txId },
+        data: {
+          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.expenseTypeId !== undefined && { expenseTypeId: dto.expenseTypeId || null }),
+        },
+        include: {
+          images: true,
+          expenseType: true,
+          createdBy: { select: { id: true, firstName: true, lastName: true } },
+          closedBy: { select: { id: true, firstName: true, lastName: true } },
+        },
+      });
     });
   }
 
