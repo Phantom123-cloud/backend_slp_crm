@@ -10,6 +10,8 @@ import {
   UpdatePresentationTypeDto,
   CreateVenueDto,
   UpdateVenueDto,
+  CreateExpenseTypeDto,
+  UpdateExpenseTypeDto,
 } from './dto/directories.dto';
 
 @Injectable()
@@ -98,6 +100,68 @@ export class DirectoriesService {
       userId,
       action: 'presentationType.deleted',
       entity: 'presentationType',
+      entityId: id,
+    });
+  }
+
+  // ==================== Expense Types ====================
+
+  async findAllExpenseTypes() {
+    return this.prisma.expenseType.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  async createExpenseType(dto: CreateExpenseTypeDto, userId: string) {
+    const exists = await this.prisma.expenseType.findUnique({ where: { name: dto.name } });
+    if (exists) throw new ConflictException('errors.expenseTypeExists');
+
+    const type = await this.prisma.expenseType.create({ data: dto });
+
+    await this.auditService.log({
+      userId,
+      action: 'expenseType.created',
+      entity: 'expenseType',
+      entityId: type.id,
+      details: dto,
+    });
+
+    return type;
+  }
+
+  async updateExpenseType(id: string, dto: UpdateExpenseTypeDto, userId: string) {
+    const type = await this.prisma.expenseType.findUnique({ where: { id } });
+    if (!type) throw new NotFoundException('errors.expenseTypeNotFound');
+
+    if (dto.name && dto.name !== type.name) {
+      const exists = await this.prisma.expenseType.findUnique({ where: { name: dto.name } });
+      if (exists) throw new ConflictException('errors.expenseTypeExists');
+    }
+
+    const updated = await this.prisma.expenseType.update({ where: { id }, data: dto });
+
+    await this.auditService.log({
+      userId,
+      action: 'expenseType.updated',
+      entity: 'expenseType',
+      entityId: id,
+      details: dto,
+    });
+
+    return updated;
+  }
+
+  async deleteExpenseType(id: string, userId: string) {
+    const type = await this.prisma.expenseType.findUnique({ where: { id } });
+    if (!type) throw new NotFoundException('errors.expenseTypeNotFound');
+
+    const usageCount = await this.prisma.walletTx.count({ where: { expenseTypeId: id } });
+    if (usageCount > 0) throw new ConflictException('errors.expenseTypeInUse');
+
+    await this.prisma.expenseType.delete({ where: { id } });
+
+    await this.auditService.log({
+      userId,
+      action: 'expenseType.deleted',
+      entity: 'expenseType',
       entityId: id,
     });
   }

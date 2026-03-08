@@ -112,6 +112,12 @@ model User {
   warehousesCreated   Warehouse[]   @relation("WarehouseCreator")
   transactions        Transaction[]
 
+  // Wallet relations
+  personalWallets     Wallet[]      @relation("PersonalWallet")
+  walletsCreated      Wallet[]      @relation("WalletCreator")
+  walletTxsCreated    WalletTx[]    @relation("WalletTxCreatedBy")
+  walletTxsClosed     WalletTx[]    @relation("WalletTxClosedBy")
+
   @@map("users")
 }
 
@@ -460,14 +466,146 @@ model TransactionItem {
   @@map("transaction_items")
 }
 
-model Wallet {
-  id     String @id @default(uuid())
-  tripId String @unique
-  trip   Trip   @relation(fields: [tripId], references: [id], onDelete: Cascade)
+// ==================== WALLETS ====================
 
-  createdAt DateTime @default(now())
+enum WalletType {
+  TRIP
+  PERSONAL
+}
+
+enum WalletTxType {
+  INCOME       // Приход средств
+  TRANSFER_OUT // Исходящий перевод
+  TRANSFER_IN  // Входящий перевод
+  CONVERSION   // Конвертация валюты
+}
+
+model Wallet {
+  id          String     @id @default(uuid())
+  type        WalletType
+  name        String?    // для PERSONAL — имя кошелька
+
+  // для PERSONAL: владелец
+  ownerId     String?
+  owner       User?      @relation("PersonalWallet", fields: [ownerId], references: [id])
+
+  // для TRIP: связь с выездом (1:1)
+  tripId      String?    @unique
+  trip        Trip?      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  isBlocked   Boolean    @default(false)
+
+  createdById String
+  createdBy   User       @relation("WalletCreator", fields: [createdById], references: [id])
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  balances     WalletBalance[]
+  transactions WalletTx[]
+  transfersOut WalletTransfer[] @relation("WalletTransferFrom")
+  transfersIn  WalletTransfer[] @relation("WalletTransferTo")
 
   @@map("wallets")
+}
+
+// Баланс кошелька в конкретной валюте
+model WalletBalance {
+  id       String  @id @default(uuid())
+  walletId String
+  wallet   Wallet  @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  currency String  // ISO 4217: "USD", "RUB", "UZS" и т.д.
+  amount   Decimal @default(0) @db.Decimal(18, 4)
+
+  @@unique([walletId, currency])
+  @@map("wallet_balances")
+}
+
+// Транзакция в кошельке
+model WalletTx {
+  id           String       @id @default(uuid())
+  walletId     String
+  wallet       Wallet       @relation(fields: [walletId], references: [id])
+  type         WalletTxType
+
+  currency     String    // основная валюта транзакции
+  amount       Decimal   @db.Decimal(18, 4)
+
+  // Для CONVERSION: целевая валюта и сумма
+  toCurrency   String?
+  toAmount     Decimal?  @db.Decimal(18, 4)
+  rate         Decimal?  @db.Decimal(18, 6) // курс обмена
+  isCustomRate Boolean   @default(false)    // пользовательский курс
+
+  // Для INCOME: тип расхода из справочника
+  expenseTypeId String?
+  expenseType   ExpenseType? @relation(fields: [expenseTypeId], references: [id])
+
+  description  String?
+
+  // Закрытие транзакции (только аудитор)
+  isClosed     Boolean   @default(false)
+  closedAt     DateTime?
+  closedById   String?
+  closedBy     User?     @relation("WalletTxClosedBy", fields: [closedById], references: [id])
+
+  createdById  String
+  createdBy    User      @relation("WalletTxCreatedBy", fields: [createdById], references: [id])
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  images      WalletTxImage[]
+  transferOut WalletTransfer? @relation("WalletTransferOutTx")
+  transferIn  WalletTransfer? @relation("WalletTransferInTx")
+
+  @@map("wallet_txs")
+}
+
+// Фото к транзакции (до 15 штук)
+model WalletTxImage {
+  id        String   @id @default(uuid())
+  txId      String
+  tx        WalletTx @relation(fields: [txId], references: [id], onDelete: Cascade)
+  url       String
+  filename  String?
+  createdAt DateTime @default(now())
+
+  @@map("wallet_tx_images")
+}
+
+// Перевод между кошельками (связывает две транзакции)
+model WalletTransfer {
+  id           String   @id @default(uuid())
+  fromWalletId String
+  fromWallet   Wallet   @relation("WalletTransferFrom", fields: [fromWalletId], references: [id])
+  toWalletId   String
+  toWallet     Wallet   @relation("WalletTransferTo", fields: [toWalletId], references: [id])
+
+  outTxId      String   @unique
+  outTx        WalletTx @relation("WalletTransferOutTx", fields: [outTxId], references: [id])
+  inTxId       String   @unique
+  inTx         WalletTx @relation("WalletTransferInTx", fields: [inTxId], references: [id])
+
+  currency     String
+  amount       Decimal  @db.Decimal(18, 4)
+
+  createdAt    DateTime @default(now())
+
+  @@map("wallet_transfers")
+}
+
+// Тип расхода (справочник)
+model ExpenseType {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  walletTxs WalletTx[]
+
+  @@map("expense_types")
 }
 
 // ==================== AUDIT LOG ====================

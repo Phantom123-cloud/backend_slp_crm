@@ -19,6 +19,8 @@ import {
   UpdatePresentationTypeDto,
   CreateVenueDto,
   UpdateVenueDto,
+  CreateExpenseTypeDto,
+  UpdateExpenseTypeDto,
 } from './dto/directories.dto';
 
 @ApiTags('Directories')
@@ -65,6 +67,45 @@ export class DirectoriesController {
     @CurrentUser('id') userId: string,
   ) {
     return this.directoriesService.deletePresentationType(id, userId);
+  }
+
+  // === Expense Types ===
+
+  @Get('expense-types')
+  @ApiOperation({ summary: 'Список типов расходов' })
+  findAllExpenseTypes() {
+    return this.directoriesService.findAllExpenseTypes();
+  }
+
+  @Post('expense-types')
+  @RequirePermissions('directories.manage')
+  @ApiOperation({ summary: 'Создать тип расхода' })
+  createExpenseType(
+    @Body() dto: CreateExpenseTypeDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.directoriesService.createExpenseType(dto, userId);
+  }
+
+  @Patch('expense-types/:id')
+  @RequirePermissions('directories.manage')
+  @ApiOperation({ summary: 'Обновить тип расхода' })
+  updateExpenseType(
+    @Param('id') id: string,
+    @Body() dto: UpdateExpenseTypeDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.directoriesService.updateExpenseType(id, dto, userId);
+  }
+
+  @Delete('expense-types/:id')
+  @RequirePermissions('directories.manage')
+  @ApiOperation({ summary: 'Удалить тип расхода' })
+  deleteExpenseType(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.directoriesService.deleteExpenseType(id, userId);
   }
 
   // === Venues ===

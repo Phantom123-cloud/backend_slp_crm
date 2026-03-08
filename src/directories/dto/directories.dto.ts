@@ -28,6 +28,23 @@ export class UpdatePresentationTypeDto {
   description?: string;
 }
 
+// === Expense Types ===
+
+export class CreateExpenseTypeDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+}
+
+export class UpdateExpenseTypeDto {
+  @ApiPropertyOptional()
+  @IsString()
+  @IsNotEmpty()
+  @IsOptional()
+  name?: string;
+}
+
 // === Venues ===
 
 export class CreateVenueDto {

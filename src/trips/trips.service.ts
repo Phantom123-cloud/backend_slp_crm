@@ -283,7 +283,9 @@ export class TripsService {
           createdById: userId,
         },
       });
-      await tx.wallet.create({ data: { tripId: newTrip.id } });
+      await tx.wallet.create({
+        data: { type: 'TRIP', tripId: newTrip.id, createdById: userId },
+      });
 
       return newTrip;
     });

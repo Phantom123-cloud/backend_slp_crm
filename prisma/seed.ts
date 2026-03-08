@@ -61,6 +61,13 @@ async function main() {
     { name: 'Создание складов', slug: 'warehouses.create', group: 'warehouses', description: 'Создание центральных и личных складов' },
     { name: 'Транзакции по своим складам', slug: 'warehouses.transaction', group: 'warehouses', description: 'Транзакции на складах, где назначен ответственным' },
     { name: 'Управление складами', slug: 'warehouses.manage', group: 'warehouses', description: 'Полное управление всеми складами' },
+    // Wallets
+    { name: 'Просмотр всех кошельков', slug: 'wallets.view-all', group: 'wallets', description: 'Просмотр всех кошельков в системе' },
+    { name: 'Просмотр своих кошельков', slug: 'wallets.view-person', group: 'wallets', description: 'Просмотр кошельков, где назначен ответственным' },
+    { name: 'Создание кошельков', slug: 'wallets.create', group: 'wallets', description: 'Создание личных кошельков' },
+    { name: 'Редактирование кошельков', slug: 'wallets.edit', group: 'wallets', description: 'Смена ответственного, переименование' },
+    { name: 'Управление кошельками', slug: 'wallets.manage', group: 'wallets', description: 'Полное управление всеми кошельками' },
+    { name: 'Аудитор кошельков', slug: 'wallets.auditor', group: 'wallets', description: 'Закрытие транзакций (блокировка редактирования)' },
   ];
 
   const createdPerms: Record<string, string> = {};
