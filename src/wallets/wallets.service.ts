@@ -16,7 +16,7 @@ import {
 } from './dto/wallets.dto';
 import { WalletType, WalletTxType } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
-import * as dayjs from 'dayjs';
+import dayjs from 'dayjs';
 
 @Injectable()
 export class WalletsService {
