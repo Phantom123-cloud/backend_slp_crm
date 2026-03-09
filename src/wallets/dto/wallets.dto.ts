@@ -40,6 +40,10 @@ export class UpdateTransactionDto {
   @ApiPropertyOptional({ type: [String] }) @IsOptional() images?: string[];
 }
 
+export class ExportTransactionsDto {
+  @ApiPropertyOptional({ enum: ['xlsx', 'csv'] }) @IsOptional() @IsString() format?: 'xlsx' | 'csv';
+}
+
 export class ConversionDto {
   @ApiProperty() @IsString() fromCurrency: string;
   @ApiProperty() @IsNumber() @IsPositive() fromAmount: number;

@@ -7,7 +7,9 @@ import {
   Body,
   Param,
   UseGuards,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { WalletsService } from './wallets.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -21,6 +23,7 @@ import {
   TransferDto,
   ConversionDto,
   UpdateTransactionDto,
+  ExportTransactionsDto,
 } from './dto/wallets.dto';
 
 @ApiTags('Wallets')
@@ -88,6 +91,25 @@ export class WalletsController {
   @ApiOperation({ summary: 'История транзакций кошелька' })
   getTransactions(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.walletsService.getTransactions(id, userId);
+  }
+
+  @Post(':id/transactions/export')
+  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.auditor')
+  @ApiOperation({ summary: 'Экспорт транзакций кошелька в xlsx/csv' })
+  async exportTransactions(
+    @Param('id') id: string,
+    @Body() dto: ExportTransactionsDto,
+    @CurrentUser('id') userId: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.walletsService.exportTransactions(id, dto, userId);
+    const isXlsx = (dto.format || 'xlsx') === 'xlsx';
+    const ext = isXlsx ? 'xlsx' : 'csv';
+    const mime = isXlsx
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : 'text/csv; charset=utf-8';
+    res.set({ 'Content-Type': mime, 'Content-Disposition': `attachment; filename="transactions.${ext}"` });
+    res.send(buffer);
   }
 
   @Post(':id/income')

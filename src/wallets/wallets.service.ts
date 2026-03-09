@@ -12,8 +12,11 @@ import {
   TransferDto,
   ConversionDto,
   UpdateTransactionDto,
+  ExportTransactionsDto,
 } from './dto/wallets.dto';
 import { WalletType, WalletTxType } from '@prisma/client';
+import * as ExcelJS from 'exceljs';
+import * as dayjs from 'dayjs';
 
 @Injectable()
 export class WalletsService {
@@ -525,6 +528,115 @@ export class WalletsService {
       where: { id: txId },
       data: { isClosed: false, closedAt: null, closedById: null },
     });
+  }
+
+  // ==================== Экспорт транзакций ====================
+
+  async exportTransactions(walletId: string, dto: ExportTransactionsDto, userId: string): Promise<Buffer> {
+    const { format = 'xlsx' } = dto;
+
+    // Переиспользуем логику getTransactions (с проверкой доступа)
+    const wallet = await this.prisma.wallet.findUnique({ where: { id: walletId } });
+    if (!wallet) throw new NotFoundException('Wallet not found');
+    await this.checkViewAccess(wallet, userId);
+
+    const txs = await this.prisma.walletTx.findMany({
+      where: { walletId },
+      include: {
+        createdBy: { select: { firstName: true, lastName: true } },
+        closedBy: { select: { firstName: true, lastName: true } },
+        expenseType: { select: { name: true } },
+        transferOut: {
+          include: { toWallet: { select: { name: true, type: true, trip: { select: { name: true } } } } },
+        },
+        transferIn: {
+          include: { fromWallet: { select: { name: true, type: true, trip: { select: { name: true } } } } },
+        },
+        images: { select: { id: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Тип транзакции → русское название
+    const TYPE_LABELS: Record<string, string> = {
+      INCOME: 'Приход',
+      EXPENSE: 'Расход',
+      TRANSFER_OUT: 'Перевод (исх.)',
+      TRANSFER_IN: 'Перевод (вх.)',
+      CONVERSION: 'Конвертация',
+    };
+
+    // Контрагент: для переводов — имя кошелька, для INCOME/EXPENSE — тип расхода
+    const getCounterpart = (tx: any): string => {
+      if (tx.type === 'TRANSFER_OUT' && tx.transferOut?.toWallet) {
+        const w = tx.transferOut.toWallet;
+        return w.trip ? `Выезд: ${w.trip.name}` : (w.name || '—');
+      }
+      if (tx.type === 'TRANSFER_IN' && tx.transferIn?.fromWallet) {
+        const w = tx.transferIn.fromWallet;
+        return w.trip ? `Выезд: ${w.trip.name}` : (w.name || '—');
+      }
+      return tx.expenseType?.name || '—';
+    };
+
+    const rows = txs.map((tx: any) => ({
+      type: TYPE_LABELS[tx.type] || tx.type,
+      amount: Number(tx.amount),
+      currency: tx.currency,
+      rate: tx.type === 'CONVERSION' ? Number(tx.rate) : null,
+      toCurrency: tx.type === 'CONVERSION' ? tx.toCurrency : null,
+      toAmount: tx.type === 'CONVERSION' ? Number(tx.toAmount) : null,
+      counterpart: getCounterpart(tx),
+      description: tx.description || '',
+      photos: tx.images?.length ?? 0,
+      author: tx.createdBy ? `${tx.createdBy.lastName} ${tx.createdBy.firstName}` : '',
+      date: dayjs(tx.createdAt).format('DD.MM.YYYY'),
+      status: tx.isClosed ? 'Закрыта' : 'Открыта',
+      closedBy: tx.closedBy ? `${tx.closedBy.lastName} ${tx.closedBy.firstName}` : '',
+    }));
+
+    const COLUMNS = [
+      { key: 'type',        header: 'Тип',              width: 18 },
+      { key: 'amount',      header: 'Сумма',             width: 14 },
+      { key: 'currency',    header: 'Валюта',            width: 10 },
+      { key: 'rate',        header: 'Курс',              width: 12 },
+      { key: 'toCurrency',  header: 'Валюта (результат)', width: 18 },
+      { key: 'toAmount',    header: 'Сумма (результат)', width: 16 },
+      { key: 'counterpart', header: 'Контрагент / тип',  width: 22 },
+      { key: 'description', header: 'Описание',          width: 30 },
+      { key: 'photos',      header: 'Фото',              width: 8  },
+      { key: 'author',      header: 'Автор',             width: 22 },
+      { key: 'date',        header: 'Дата',              width: 12 },
+      { key: 'status',      header: 'Статус',            width: 12 },
+      { key: 'closedBy',    header: 'Закрыл',            width: 22 },
+    ];
+
+    if (format === 'csv') {
+      const BOM = '\uFEFF';
+      const SEP = ';';
+      const header = COLUMNS.map((c) => `"${c.header}"`).join(SEP);
+      const dataRows = rows.map((r) =>
+        COLUMNS.map((c) => {
+          const val = r[c.key as keyof typeof r];
+          const str = (val === null || val === undefined) ? '' : String(val);
+          return `"${str.replace(/"/g, '""')}"`;
+        }).join(SEP),
+      );
+      return Buffer.from(BOM + [header, ...dataRows].join('\r\n'), 'utf-8');
+    }
+
+    // Excel
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Транзакции');
+    sheet.columns = COLUMNS.map((c) => ({ header: c.header, key: c.key, width: c.width }));
+    sheet.getRow(1).font = { bold: true };
+
+    for (const r of rows) {
+      sheet.addRow(r);
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
   }
 
   /** Загрузить файл к транзакции (URL из файлового сервиса) */
