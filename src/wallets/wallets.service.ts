@@ -516,6 +516,17 @@ export class WalletsService {
     });
   }
 
+  async reopenTransaction(txId: string) {
+    const tx = await this.prisma.walletTx.findUnique({ where: { id: txId } });
+    if (!tx) throw new NotFoundException('Transaction not found');
+    if (!tx.isClosed) throw new BadRequestException('errors.notClosed');
+
+    return this.prisma.walletTx.update({
+      where: { id: txId },
+      data: { isClosed: false, closedAt: null, closedById: null },
+    });
+  }
+
   /** Загрузить файл к транзакции (URL из файлового сервиса) */
   async addImage(txId: string, url: string, filename?: string) {
     const tx = await this.prisma.walletTx.findUnique({ where: { id: txId } });

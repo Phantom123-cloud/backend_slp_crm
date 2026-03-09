@@ -151,4 +151,11 @@ export class WalletsController {
   closeTransaction(@Param('txId') txId: string, @CurrentUser('id') userId: string) {
     return this.walletsService.closeTransaction(txId, userId);
   }
+
+  @Post('transactions/:txId/reopen')
+  @RequireAnyPermission('wallets.auditor', 'wallets.manage')
+  @ApiOperation({ summary: 'Открыть (снять закрытие) транзакцию (только аудитор)' })
+  reopenTransaction(@Param('txId') txId: string) {
+    return this.walletsService.reopenTransaction(txId);
+  }
 }
