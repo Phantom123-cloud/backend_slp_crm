@@ -36,14 +36,14 @@ export class WalletsController {
   // ==================== WALLETS ====================
 
   @Get()
-  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit')
+  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction')
   @ApiOperation({ summary: 'Список кошельков (фильтруется по правам)' })
   findAll(@CurrentUser('id') userId: string) {
     return this.walletsService.findAll(userId);
   }
 
   @Get(':id')
-  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit')
+  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction')
   @ApiOperation({ summary: 'Детальная страница кошелька' })
   findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.walletsService.findOne(id, userId);
@@ -87,14 +87,14 @@ export class WalletsController {
   // ==================== TRANSACTIONS ====================
 
   @Get(':id/transactions')
-  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.auditor')
+  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.auditor', 'wallets.transaction')
   @ApiOperation({ summary: 'История транзакций кошелька' })
   getTransactions(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.walletsService.getTransactions(id, userId);
   }
 
   @Post(':id/transactions/export')
-  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.auditor')
+  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.auditor', 'wallets.transaction')
   @ApiOperation({ summary: 'Экспорт транзакций кошелька в xlsx/csv' })
   async exportTransactions(
     @Param('id') id: string,
@@ -113,7 +113,7 @@ export class WalletsController {
   }
 
   @Post(':id/income')
-  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit')
+  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction')
   @ApiOperation({ summary: 'Внести приход средств' })
   income(
     @Param('id') id: string,
@@ -124,7 +124,7 @@ export class WalletsController {
   }
 
   @Post(':id/expense')
-  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit')
+  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction')
   @ApiOperation({ summary: 'Внести расход средств' })
   expense(
     @Param('id') id: string,
@@ -135,7 +135,7 @@ export class WalletsController {
   }
 
   @Post(':id/transfer')
-  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit')
+  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction')
   @ApiOperation({ summary: 'Перевод между кошельками' })
   transfer(
     @Param('id') id: string,
@@ -146,7 +146,7 @@ export class WalletsController {
   }
 
   @Post(':id/conversion')
-  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit')
+  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction')
   @ApiOperation({ summary: 'Конвертация валюты внутри кошелька' })
   conversion(
     @Param('id') id: string,
@@ -157,7 +157,7 @@ export class WalletsController {
   }
 
   @Patch('transactions/:txId')
-  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit')
+  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction')
   @ApiOperation({ summary: 'Обновить транзакцию (описание, тип расхода, фото)' })
   updateTransaction(
     @Param('txId') txId: string,

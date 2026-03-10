@@ -42,7 +42,7 @@ export class WalletsService {
     const perms = await this.getUserPerms(userId);
     if (perms.includes('wallets.manage') || perms.includes('wallets.view-all')) return;
 
-    if (perms.includes('wallets.view-person') || perms.includes('wallets.edit')) {
+    if (perms.includes('wallets.view-person') || perms.includes('wallets.edit') || perms.includes('wallets.transaction')) {
       // PERSONAL: ownerId совпадает
       if (wallet.type === 'PERSONAL' && wallet.ownerId === userId) return;
       // TRIP: пользователь ГА или МВ/ГА в этом выезде
@@ -96,7 +96,7 @@ export class WalletsService {
     const perms = await this.getUserPerms(userId);
     const canViewAll = perms.includes('wallets.view-all');
     const canManage = perms.includes('wallets.manage');
-    const canViewPerson = perms.includes('wallets.view-person') || perms.includes('wallets.edit');
+    const canViewPerson = perms.includes('wallets.view-person') || perms.includes('wallets.edit') || perms.includes('wallets.transaction');
 
     if (canManage || canViewAll) {
       return this.prisma.wallet.findMany({

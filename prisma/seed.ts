@@ -66,6 +66,7 @@ async function main() {
     { name: 'Просмотр своих кошельков', slug: 'wallets.view-person', group: 'wallets', description: 'Просмотр кошельков, где назначен ответственным' },
     { name: 'Создание кошельков', slug: 'wallets.create', group: 'wallets', description: 'Создание личных кошельков' },
     { name: 'Редактирование кошельков', slug: 'wallets.edit', group: 'wallets', description: 'Смена ответственного, переименование' },
+    { name: 'Транзакции по своим кошелькам', slug: 'wallets.transaction', group: 'wallets', description: 'Транзакции в кошельках/конвертации/переводы, где назначен ответственным' },
     { name: 'Управление кошельками', slug: 'wallets.manage', group: 'wallets', description: 'Полное управление всеми кошельками' },
     { name: 'Аудитор кошельков', slug: 'wallets.auditor', group: 'wallets', description: 'Закрытие транзакций (блокировка редактирования)' },
   ];
