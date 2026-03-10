@@ -36,14 +36,14 @@ export class WalletsController {
   // ==================== WALLETS ====================
 
   @Get()
-  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction', 'wallets.auditor')
+  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction')
   @ApiOperation({ summary: 'Список кошельков (фильтруется по правам)' })
   findAll(@CurrentUser('id') userId: string) {
     return this.walletsService.findAll(userId);
   }
 
   @Get(':id')
-  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction', 'wallets.auditor')
+  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction')
   @ApiOperation({ summary: 'Детальная страница кошелька' })
   findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.walletsService.findOne(id, userId);

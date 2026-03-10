@@ -40,8 +40,7 @@ export class WalletsService {
     userId: string,
   ) {
     const perms = await this.getUserPerms(userId);
-    // Аудитор и управляющие видят все кошельки без ограничений
-    if (perms.includes('wallets.manage') || perms.includes('wallets.view-all') || perms.includes('wallets.auditor')) return;
+    if (perms.includes('wallets.manage') || perms.includes('wallets.view-all')) return;
 
     if (perms.includes('wallets.view-person') || perms.includes('wallets.edit') || perms.includes('wallets.transaction')) {
       // PERSONAL: ownerId совпадает
@@ -97,11 +96,9 @@ export class WalletsService {
     const perms = await this.getUserPerms(userId);
     const canViewAll = perms.includes('wallets.view-all');
     const canManage = perms.includes('wallets.manage');
-    const canAudit = perms.includes('wallets.auditor');
     const canViewPerson = perms.includes('wallets.view-person') || perms.includes('wallets.edit') || perms.includes('wallets.transaction');
 
-    // Аудитор видит все кошельки (но не может совершать транзакции)
-    if (canManage || canViewAll || canAudit) {
+    if (canManage || canViewAll) {
       return this.prisma.wallet.findMany({
         include: this.walletListInclude(),
         orderBy: { createdAt: 'desc' },
