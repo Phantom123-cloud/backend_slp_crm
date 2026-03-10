@@ -478,7 +478,12 @@ export class WalletsService {
     });
     if (!tx) throw new NotFoundException('Transaction not found');
     if (tx.isClosed) throw new BadRequestException('errors.transactionClosed');
-    await this.checkTransactAccess(tx.wallet, userId);
+
+    const perms = await this.getUserPerms(userId);
+    // wallets.manage и wallets.edit — редактируют детали любой транзакции
+    if (!perms.includes('wallets.manage') && !perms.includes('wallets.edit')) {
+      await this.checkTransactAccess(tx.wallet, userId);
+    }
 
     if (dto.images !== undefined && dto.images.length > 15) {
       throw new BadRequestException('errors.tooManyImages');

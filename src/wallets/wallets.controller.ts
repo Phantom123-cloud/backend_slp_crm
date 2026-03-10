@@ -157,7 +157,7 @@ export class WalletsController {
   }
 
   @Patch('transactions/:txId')
-  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.transaction')
+  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.transaction')
   @ApiOperation({ summary: 'Обновить транзакцию (описание, тип расхода, фото)' })
   updateTransaction(
     @Param('txId') txId: string,
