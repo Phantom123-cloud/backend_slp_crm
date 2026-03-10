@@ -426,8 +426,8 @@ export class WarehousesService {
   ) {
     const perms = await this.getUserPerms(userId);
 
-    // Full manage or view-all → always OK
-    if (perms.includes('warehouses.manage') || perms.includes('warehouses.view-all') || perms.includes('trips.admin')) {
+    // Full manage, view-all или edit → always OK
+    if (perms.includes('warehouses.manage') || perms.includes('warehouses.view-all') || perms.includes('warehouses.edit') || perms.includes('trips.admin')) {
       return;
     }
 
@@ -474,5 +474,37 @@ export class WarehousesService {
     }
 
     throw new ForbiddenException();
+  }
+
+  async updateTransaction(txId: string, dto: { note?: string }, userId: string) {
+    const tx = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      include: {
+        fromWarehouse: true,
+        toWarehouse: true,
+      },
+    });
+    if (!tx) throw new NotFoundException('Transaction not found');
+
+    const perms = await this.getUserPerms(userId);
+
+    // manage и edit — редактируют примечание любой транзакции
+    if (!perms.includes('warehouses.manage') && !perms.includes('warehouses.edit')) {
+      // transaction — только свои склады
+      const warehouse = tx.fromWarehouse ?? tx.toWarehouse;
+      if (!warehouse) throw new ForbiddenException();
+      await this.checkTransactAccess(warehouse, userId);
+    }
+
+    return this.prisma.transaction.update({
+      where: { id: txId },
+      data: { note: dto.note !== undefined ? (dto.note || null) : undefined },
+      include: {
+        items: { include: { product: true } },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        fromWarehouse: { select: { id: true, name: true } },
+        toWarehouse: { select: { id: true, name: true } },
+      },
+    });
   }
 }

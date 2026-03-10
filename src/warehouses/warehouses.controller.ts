@@ -18,6 +18,7 @@ import {
   CreateWarehouseDto,
   UpdateWarehouseDto,
   CreateTransactionDto,
+  UpdateTransactionDto,
 } from './dto/warehouses.dto';
 
 @ApiTags('Warehouses')
@@ -28,7 +29,7 @@ export class WarehousesController {
   constructor(private warehousesService: WarehousesService) {}
 
   @Get()
-  @RequireAnyPermission('warehouses.view-all', 'warehouses.view-person', 'warehouses.manage', 'warehouses.transaction')
+  @RequireAnyPermission('warehouses.view-all', 'warehouses.view-person', 'warehouses.manage', 'warehouses.edit', 'warehouses.transaction')
   @ApiOperation({ summary: 'Список складов (фильтруется по правам)' })
   findAll(@CurrentUser('id') userId: string) {
     return this.warehousesService.findAll(userId);
@@ -37,7 +38,7 @@ export class WarehousesController {
   @Get(':id')
   @RequireAnyPermission(
     'warehouses.view-all', 'warehouses.view-person', 'warehouses.manage',
-    'warehouses.transaction', 'trips.admin',
+    'warehouses.edit', 'warehouses.transaction', 'trips.admin',
   )
   @ApiOperation({ summary: 'Детальная страница склада' })
   findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
@@ -52,7 +53,7 @@ export class WarehousesController {
   }
 
   @Patch(':id')
-  @RequireAnyPermission('warehouses.manage')
+  @RequireAnyPermission('warehouses.manage', 'warehouses.edit')
   @ApiOperation({ summary: 'Обновить склад (название, ответственный)' })
   update(@Param('id') id: string, @Body() dto: UpdateWarehouseDto) {
     return this.warehousesService.update(id, dto);
@@ -82,11 +83,22 @@ export class WarehousesController {
   @Get(':id/transactions')
   @RequireAnyPermission(
     'warehouses.view-all', 'warehouses.view-person', 'warehouses.manage',
-    'warehouses.transaction', 'trips.admin',
+    'warehouses.edit', 'warehouses.transaction', 'trips.admin',
   )
   @ApiOperation({ summary: 'История транзакций склада' })
   getTransactions(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.warehousesService.getTransactions(id, userId);
+  }
+
+  @Patch('transactions/:txId')
+  @RequireAnyPermission('warehouses.manage', 'warehouses.edit', 'warehouses.transaction', 'trips.admin')
+  @ApiOperation({ summary: 'Редактировать примечание транзакции' })
+  updateTransaction(
+    @Param('txId') txId: string,
+    @Body() dto: UpdateTransactionDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.warehousesService.updateTransaction(txId, dto, userId);
   }
 
   @Post(':id/transactions')

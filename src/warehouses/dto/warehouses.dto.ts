@@ -92,3 +92,10 @@ export class CreateTransactionDto {
   @IsString()
   note?: string;
 }
+
+export class UpdateTransactionDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  note?: string;
+}

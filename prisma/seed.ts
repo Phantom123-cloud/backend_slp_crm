@@ -62,6 +62,7 @@ async function main() {
     { name: 'Просмотр всех складов', slug: 'warehouses.view-all', group: 'warehouses', description: 'Просмотр всех складов в системе' },
     { name: 'Просмотр своих складов', slug: 'warehouses.view-person', group: 'warehouses', description: 'Просмотр складов, где назначен ответственным (только просмотр)' },
     { name: 'Создание складов', slug: 'warehouses.create', group: 'warehouses', description: 'Создание центральных и личных складов' },
+    { name: 'Редактирование складов', slug: 'warehouses.edit', group: 'warehouses', description: 'Смена ответственного, переименование, редактирование примечания транзакций' },
     { name: 'Транзакции по своим складам', slug: 'warehouses.transaction', group: 'warehouses', description: 'Транзакции на складах, где назначен ответственным' },
     { name: 'Управление складами', slug: 'warehouses.manage', group: 'warehouses', description: 'Полное управление всеми складами' },
     // Wallets
