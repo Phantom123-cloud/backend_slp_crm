@@ -67,10 +67,13 @@ export class WalletsService {
     const perms = await this.getUserPerms(userId);
     if (perms.includes('wallets.manage')) return;
 
-    // PERSONAL: владелец с правом view-person или manage
+    // Без права на транзакции — запрещено
+    if (!perms.includes('wallets.transaction')) throw new ForbiddenException();
+
+    // PERSONAL: только владелец
     if (wallet.type === 'PERSONAL' && wallet.ownerId === userId) return;
 
-    // TRIP: ГА или МВ/ГА в этом выезде
+    // TRIP: только ГА или МВ_ГА в этом выезде
     if (wallet.type === 'TRIP' && wallet.tripId) {
       const crew = await this.prisma.tripCrew.findFirst({
         where: { tripId: wallet.tripId, userId, role: { in: ['GA', 'MV_GA'] } },
