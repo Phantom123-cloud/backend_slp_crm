@@ -8,7 +8,7 @@ async function main() {
   console.log('🌱 Seeding database...');
 
   // === 0. Remove deprecated permissions ===
-  const deprecated = ['trips.view', 'presentations.view', 'warehouses.view'];
+  const deprecated = ['trips.view', 'presentations.view', 'warehouses.view', 'directories.manage'];
   for (const slug of deprecated) {
     const perm = await prisma.permission.findUnique({ where: { slug } });
     if (perm) {
@@ -54,7 +54,10 @@ async function main() {
     { name: 'Редактирование презентаций', slug: 'presentations.edit', group: 'presentations', description: 'Редактирование презентаций и состава' },
     { name: 'Удаление презентаций', slug: 'presentations.delete', group: 'presentations', description: 'Удаление/отмена презентаций' },
     // Directories
-    { name: 'Управление справочниками', slug: 'directories.manage', group: 'directories', description: 'Управление типами презентаций и местами проведения' },
+    { name: 'Просмотр справочников', slug: 'directories.view', group: 'directories', description: 'Просмотр справочников: типы презентаций, товары, места, типы расходов' },
+    { name: 'Добавление в справочники', slug: 'directories.create', group: 'directories', description: 'Добавление новых записей во все справочники' },
+    { name: 'Редактирование справочников', slug: 'directories.edit', group: 'directories', description: 'Редактирование записей в справочниках' },
+    { name: 'Удаление из справочников', slug: 'directories.delete', group: 'directories', description: 'Удаление записей из справочников' },
     // Warehouses
     { name: 'Просмотр всех складов', slug: 'warehouses.view-all', group: 'warehouses', description: 'Просмотр всех складов в системе' },
     { name: 'Просмотр своих складов', slug: 'warehouses.view-person', group: 'warehouses', description: 'Просмотр складов, где назначен ответственным (только просмотр)' },

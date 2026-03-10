@@ -83,10 +83,24 @@ export class PresentationsService {
 
     const where: any = {};
 
-    // view-person: только презентации, в составе которых пользователь
+    // view-person: презентации где пользователь в составе ИЛИ выезд где он ГА/МВ_ГА
     const isViewAll = userPermissions?.includes('presentations.view-all');
     if (!isViewAll && userId) {
-      where.crew = { some: { userId } };
+      where.OR = [
+        // Пользователь в составе конкретной презентации
+        { crew: { some: { userId } } },
+        // Пользователь — ГА или МВ_ГА в выезде (видит все презентации выезда)
+        {
+          trip: {
+            crew: {
+              some: {
+                userId,
+                role: { in: ['GA', 'MV_GA'] },
+              },
+            },
+          },
+        },
+      ];
     }
 
     if (filter === 'active') {

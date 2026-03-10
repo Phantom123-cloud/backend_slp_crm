@@ -12,7 +12,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DirectoriesService } from './directories.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
-import { RequirePermissions } from '../common/decorators/permissions.decorator';
+import { RequireAnyPermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   CreatePresentationTypeDto,
@@ -39,7 +39,7 @@ export class DirectoriesController {
   }
 
   @Post('presentation-types')
-  @RequirePermissions('directories.manage')
+  @RequireAnyPermission('directories.create')
   @ApiOperation({ summary: 'Создать тип презентации' })
   createPresentationType(
     @Body() dto: CreatePresentationTypeDto,
@@ -49,7 +49,7 @@ export class DirectoriesController {
   }
 
   @Patch('presentation-types/:id')
-  @RequirePermissions('directories.manage')
+  @RequireAnyPermission('directories.edit')
   @ApiOperation({ summary: 'Обновить тип презентации' })
   updatePresentationType(
     @Param('id') id: string,
@@ -60,7 +60,7 @@ export class DirectoriesController {
   }
 
   @Delete('presentation-types/:id')
-  @RequirePermissions('directories.manage')
+  @RequireAnyPermission('directories.delete')
   @ApiOperation({ summary: 'Удалить тип презентации' })
   deletePresentationType(
     @Param('id') id: string,
@@ -78,7 +78,7 @@ export class DirectoriesController {
   }
 
   @Post('expense-types')
-  @RequirePermissions('directories.manage')
+  @RequireAnyPermission('directories.create')
   @ApiOperation({ summary: 'Создать тип расхода' })
   createExpenseType(
     @Body() dto: CreateExpenseTypeDto,
@@ -88,7 +88,7 @@ export class DirectoriesController {
   }
 
   @Patch('expense-types/:id')
-  @RequirePermissions('directories.manage')
+  @RequireAnyPermission('directories.edit')
   @ApiOperation({ summary: 'Обновить тип расхода' })
   updateExpenseType(
     @Param('id') id: string,
@@ -99,7 +99,7 @@ export class DirectoriesController {
   }
 
   @Delete('expense-types/:id')
-  @RequirePermissions('directories.manage')
+  @RequireAnyPermission('directories.delete')
   @ApiOperation({ summary: 'Удалить тип расхода' })
   deleteExpenseType(
     @Param('id') id: string,
@@ -117,14 +117,14 @@ export class DirectoriesController {
   }
 
   @Post('venues')
-  @RequirePermissions('directories.manage')
+  @RequireAnyPermission('directories.create')
   @ApiOperation({ summary: 'Создать место проведения' })
   createVenue(@Body() dto: CreateVenueDto, @CurrentUser('id') userId: string) {
     return this.directoriesService.createVenue(dto, userId);
   }
 
   @Patch('venues/:id')
-  @RequirePermissions('directories.manage')
+  @RequireAnyPermission('directories.edit')
   @ApiOperation({ summary: 'Обновить место проведения' })
   updateVenue(
     @Param('id') id: string,
@@ -135,7 +135,7 @@ export class DirectoriesController {
   }
 
   @Delete('venues/:id')
-  @RequirePermissions('directories.manage')
+  @RequireAnyPermission('directories.delete')
   @ApiOperation({ summary: 'Удалить место проведения' })
   deleteVenue(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.directoriesService.deleteVenue(id, userId);
