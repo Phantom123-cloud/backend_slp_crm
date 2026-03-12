@@ -545,7 +545,7 @@ export class WarehousesService {
           fromWarehouseId: original.fromWarehouseId,
           toWarehouseId: original.toWarehouseId,
           source: original.source,
-          note: `Сторно: ${txId}`,
+          note: `Сторно от ${new Date(original.createdAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
           reversalOfId: txId,
           createdById: userId,
           items: {

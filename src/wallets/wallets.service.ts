@@ -657,7 +657,7 @@ export class WalletsService {
           toAmount: original.toAmount ? -original.toAmount : null,
           rate: original.rate,
           isCustomRate: original.isCustomRate,
-          description: `Сторно: ${txId}`,
+          description: `Сторно от ${new Date(original.createdAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
           reversalOfId: txId,
           createdById: userId,
         },
