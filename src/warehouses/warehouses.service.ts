@@ -95,7 +95,38 @@ export class WarehousesService {
     if (!warehouse) throw new NotFoundException('Warehouse not found');
 
     await this.checkViewAccess(warehouse, userId);
-    return warehouse;
+
+    // Вычисляем товары "в пути" — исходящие TRANSFER_OUT со статусом PENDING
+    const pendingOut = await this.prisma.transaction.findMany({
+      where: {
+        fromWarehouseId: id,
+        type: TransactionType.TRANSFER_OUT,
+        transferStatus: TransferStatus.PENDING,
+      },
+      include: {
+        items: { include: { product: true } },
+        toWarehouse: { select: { id: true, name: true } },
+      },
+    });
+
+    // Агрегируем "в пути" по productId
+    const inTransitMap: Record<string, { quantity: number; product: any }> = {};
+    for (const tx of pendingOut) {
+      for (const item of tx.items) {
+        const key = item.productId;
+        if (!inTransitMap[key]) {
+          inTransitMap[key] = { quantity: 0, product: item.product };
+        }
+        inTransitMap[key].quantity += Number(item.quantity);
+      }
+    }
+    const inTransit = Object.entries(inTransitMap).map(([productId, v]) => ({
+      productId,
+      product: v.product,
+      quantity: v.quantity,
+    }));
+
+    return { ...warehouse, inTransit };
   }
 
   async create(dto: CreateWarehouseDto, userId: string) {
@@ -206,6 +237,8 @@ export class WarehousesService {
         createdBy: { select: { id: true, firstName: true, lastName: true } },
         fromWarehouse: { select: { id: true, name: true } },
         toWarehouse: { select: { id: true, name: true } },
+        reversalOf: { select: { id: true } },
+        reversedBy: { select: { id: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -475,6 +508,70 @@ export class WarehousesService {
     }
 
     throw new ForbiddenException();
+  }
+
+  // ==================== Сторно (reversal) ====================
+
+  async reverseTransaction(txId: string, userId: string) {
+    const original = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      include: { items: true, fromWarehouse: true, toWarehouse: true },
+    });
+    if (!original) throw new NotFoundException('Transaction not found');
+
+    // Нельзя сторнировать переводы и уже сторнированные транзакции
+    if (original.type === TransactionType.TRANSFER_OUT || original.type === TransactionType.TRANSFER_IN) {
+      throw new BadRequestException('errors.cannotReverseTransfer');
+    }
+    const existing = await this.prisma.transaction.findUnique({
+      where: { reversalOfId: txId },
+    });
+    if (existing) throw new BadRequestException('errors.alreadyReversed');
+
+    // Доступ: тот же склад, что и оригинал
+    const warehouse = original.fromWarehouse ?? original.toWarehouse;
+    if (!warehouse) throw new BadRequestException('errors.noWarehouseOnTransaction');
+    await this.checkTransactAccess(warehouse, userId);
+
+    const warehouseId = (original.fromWarehouse ?? original.toWarehouse)!.id;
+    // Сторно инвертирует знак: INCOMING → отнять, остальные → прибавить
+    const wasIncoming = original.type === TransactionType.INCOMING;
+    const reversalSign = wasIncoming ? -1 : 1;
+
+    return this.prisma.$transaction(async (tx) => {
+      const reversal = await tx.transaction.create({
+        data: {
+          type: original.type,
+          fromWarehouseId: original.fromWarehouseId,
+          toWarehouseId: original.toWarehouseId,
+          source: original.source,
+          note: `Сторно: ${txId}`,
+          reversalOfId: txId,
+          createdById: userId,
+          items: {
+            create: original.items.map((item) => ({
+              productId: item.productId,
+              quantity: -item.quantity,
+            })),
+          },
+        },
+        include: {
+          items: { include: { product: true } },
+          createdBy: { select: { id: true, firstName: true, lastName: true } },
+        },
+      });
+
+      // Корректируем остаток
+      for (const item of original.items) {
+        await tx.stock.upsert({
+          where: { warehouseId_productId: { warehouseId, productId: item.productId } },
+          create: { warehouseId, productId: item.productId, quantity: reversalSign * Number(item.quantity) },
+          update: { quantity: { increment: reversalSign * Number(item.quantity) } },
+        });
+      }
+
+      return reversal;
+    });
   }
 
   async updateTransaction(txId: string, dto: { note?: string; source?: string }, userId: string) {

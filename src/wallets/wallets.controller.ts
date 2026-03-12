@@ -86,6 +86,13 @@ export class WalletsController {
 
   // ==================== TRANSACTIONS ====================
 
+  @Get(':id/pending-transfers')
+  @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.auditor', 'wallets.transaction')
+  @ApiOperation({ summary: 'Ожидающие входящие переводы для этого кошелька' })
+  getPendingTransfers(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.walletsService.getPendingIncomingTransfers(id, userId);
+  }
+
   @Get(':id/transactions')
   @RequireAnyPermission('wallets.view-all', 'wallets.view-person', 'wallets.manage', 'wallets.edit', 'wallets.auditor', 'wallets.transaction')
   @ApiOperation({ summary: 'История транзакций кошелька' })
@@ -165,6 +172,27 @@ export class WalletsController {
     @CurrentUser('id') userId: string,
   ) {
     return this.walletsService.updateTransaction(txId, dto, userId);
+  }
+
+  @Post('transactions/:txId/reverse')
+  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.transaction')
+  @ApiOperation({ summary: 'Сторнировать транзакцию' })
+  reverseTransaction(@Param('txId') txId: string, @CurrentUser('id') userId: string) {
+    return this.walletsService.reverseWalletTransaction(txId, userId);
+  }
+
+  @Post('transfers/:transferId/accept')
+  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.transaction')
+  @ApiOperation({ summary: 'Подтвердить входящий перевод' })
+  acceptTransfer(@Param('transferId') transferId: string, @CurrentUser('id') userId: string) {
+    return this.walletsService.acceptWalletTransfer(transferId, userId);
+  }
+
+  @Post('transfers/:transferId/cancel')
+  @RequireAnyPermission('wallets.view-person', 'wallets.manage', 'wallets.transaction')
+  @ApiOperation({ summary: 'Отменить исходящий перевод' })
+  cancelTransfer(@Param('transferId') transferId: string, @CurrentUser('id') userId: string) {
+    return this.walletsService.cancelWalletTransfer(transferId, userId);
   }
 
   @Post('transactions/:txId/close')

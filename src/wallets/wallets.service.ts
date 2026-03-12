@@ -14,7 +14,7 @@ import {
   UpdateTransactionDto,
   ExportTransactionsDto,
 } from './dto/wallets.dto';
-import { WalletType, WalletTxType } from '@prisma/client';
+import { WalletType, WalletTxType, WalletTransferStatus } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import dayjs from 'dayjs';
 
@@ -231,6 +231,21 @@ export class WalletsService {
 
   // ==================== TRANSACTIONS ====================
 
+  async getPendingIncomingTransfers(walletId: string, userId: string) {
+    const wallet = await this.prisma.wallet.findUnique({ where: { id: walletId } });
+    if (!wallet) throw new NotFoundException('Wallet not found');
+    await this.checkViewAccess(wallet, userId);
+
+    return this.prisma.walletTransfer.findMany({
+      where: { toWalletId: walletId, status: WalletTransferStatus.PENDING },
+      include: {
+        fromWallet: { select: { id: true, name: true, type: true, trip: { select: { id: true, name: true } } } },
+        outTx: { select: { id: true, createdAt: true, description: true, createdBy: { select: { id: true, firstName: true, lastName: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async getTransactions(walletId: string, userId: string) {
     const wallet = await this.prisma.wallet.findUnique({ where: { id: walletId } });
     if (!wallet) throw new NotFoundException('Wallet not found');
@@ -243,11 +258,17 @@ export class WalletsService {
         closedBy: { select: { id: true, firstName: true, lastName: true } },
         expenseType: { select: { id: true, name: true } },
         images: true,
+        reversalOf: { select: { id: true } },
+        reversedBy: { select: { id: true } },
         transferOut: {
-          include: { toWallet: { select: { id: true, name: true, type: true, trip: { select: { id: true, name: true } } } } },
+          include: {
+            toWallet: { select: { id: true, name: true, type: true, trip: { select: { id: true, name: true } } } },
+          },
         },
         transferIn: {
-          include: { fromWallet: { select: { id: true, name: true, type: true, trip: { select: { id: true, name: true } } } } },
+          include: {
+            fromWallet: { select: { id: true, name: true, type: true, trip: { select: { id: true, name: true } } } },
+          },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -356,7 +377,7 @@ export class WalletsService {
         ? dto.images.map((url) => ({ url, filename: url.split('/').pop() }))
         : [];
 
-      // Транзакция исходящая
+      // Только исходящая транзакция — входящая создаётся при подтверждении
       const outTx = await tx.walletTx.create({
         data: {
           walletId,
@@ -369,43 +390,111 @@ export class WalletsService {
         },
       });
 
-      // Транзакция входящая
-      const inTx = await tx.walletTx.create({
-        data: {
-          walletId: dto.toWalletId,
-          type: WalletTxType.TRANSFER_IN,
-          currency: dto.currency,
-          amount: dto.amount,
-          description: dto.description,
-          createdById: userId,
-        },
-      });
-
-      // Связь между транзакциями
+      // WalletTransfer со статусом PENDING, inTxId = null пока
       await tx.walletTransfer.create({
         data: {
           fromWalletId: walletId,
           toWalletId: dto.toWalletId,
           outTxId: outTx.id,
-          inTxId: inTx.id,
           currency: dto.currency,
           amount: dto.amount,
+          status: WalletTransferStatus.PENDING,
         },
       });
 
-      // Обновляем балансы
+      // Снимаем баланс у отправителя немедленно
       await tx.walletBalance.upsert({
         where: { walletId_currency: { walletId, currency: dto.currency } },
         create: { walletId, currency: dto.currency, amount: -dto.amount },
         update: { amount: { decrement: dto.amount } },
       });
-      await tx.walletBalance.upsert({
-        where: { walletId_currency: { walletId: dto.toWalletId, currency: dto.currency } },
-        create: { walletId: dto.toWalletId, currency: dto.currency, amount: dto.amount },
-        update: { amount: { increment: dto.amount } },
-      });
 
       return outTx;
+    });
+  }
+
+  // ==================== Подтверждение / отмена перевода ====================
+
+  async acceptWalletTransfer(transferId: string, userId: string) {
+    const transfer = await this.prisma.walletTransfer.findUnique({
+      where: { id: transferId },
+      include: { fromWallet: true, toWallet: true, outTx: true },
+    });
+    if (!transfer) throw new NotFoundException('Transfer not found');
+    if (transfer.status !== WalletTransferStatus.PENDING) {
+      throw new BadRequestException('errors.transferNotPending');
+    }
+
+    // Получатель подтверждает — проверяем доступ к целевому кошельку
+    if (transfer.toWallet.isBlocked) throw new BadRequestException('errors.destinationWalletBlocked');
+    await this.checkTransactAccess(transfer.toWallet, userId);
+
+    return this.prisma.$transaction(async (tx) => {
+      // Создаём входящую транзакцию у получателя
+      const inTx = await tx.walletTx.create({
+        data: {
+          walletId: transfer.toWalletId,
+          type: WalletTxType.TRANSFER_IN,
+          currency: transfer.currency,
+          amount: transfer.amount,
+          description: transfer.outTx.description,
+          createdById: userId,
+        },
+      });
+
+      // Зачисляем получателю
+      await tx.walletBalance.upsert({
+        where: { walletId_currency: { walletId: transfer.toWalletId, currency: transfer.currency } },
+        create: { walletId: transfer.toWalletId, currency: transfer.currency, amount: transfer.amount },
+        update: { amount: { increment: transfer.amount } },
+      });
+
+      // Обновляем WalletTransfer: COMPLETED + привязываем inTx
+      return tx.walletTransfer.update({
+        where: { id: transferId },
+        data: { status: WalletTransferStatus.COMPLETED, inTxId: inTx.id },
+        include: {
+          fromWallet: { select: { id: true, name: true } },
+          toWallet: { select: { id: true, name: true } },
+          outTx: true,
+          inTx: true,
+        },
+      });
+    });
+  }
+
+  async cancelWalletTransfer(transferId: string, userId: string) {
+    const transfer = await this.prisma.walletTransfer.findUnique({
+      where: { id: transferId },
+      include: { fromWallet: true },
+    });
+    if (!transfer) throw new NotFoundException('Transfer not found');
+    if (transfer.status !== WalletTransferStatus.PENDING) {
+      throw new BadRequestException('errors.transferNotPending');
+    }
+
+    // Отправитель отменяет
+    await this.checkTransactAccess(transfer.fromWallet, userId);
+
+    return this.prisma.$transaction(async (tx) => {
+      // Возвращаем баланс отправителю
+      await tx.walletBalance.upsert({
+        where: { walletId_currency: { walletId: transfer.fromWalletId, currency: transfer.currency } },
+        create: { walletId: transfer.fromWalletId, currency: transfer.currency, amount: transfer.amount },
+        update: { amount: { increment: transfer.amount } },
+      });
+
+      // Помечаем TRANSFER_OUT транзакцию как CANCELLED через description
+      // (нет поля статуса у WalletTx, но WalletTransfer.status будет CANCELLED)
+      return tx.walletTransfer.update({
+        where: { id: transferId },
+        data: { status: WalletTransferStatus.CANCELLED },
+        include: {
+          fromWallet: { select: { id: true, name: true } },
+          toWallet: { select: { id: true, name: true } },
+          outTx: true,
+        },
+      });
     });
   }
 
@@ -535,6 +624,77 @@ export class WalletsService {
     return this.prisma.walletTx.update({
       where: { id: txId },
       data: { isClosed: false, closedAt: null, closedById: null },
+    });
+  }
+
+  // ==================== Сторно (reversal) ====================
+
+  async reverseWalletTransaction(txId: string, userId: string) {
+    const original = await this.prisma.walletTx.findUnique({
+      where: { id: txId },
+      include: { wallet: true, reversedBy: true },
+    });
+    if (!original) throw new NotFoundException('Transaction not found');
+    if (original.isClosed) throw new BadRequestException('errors.transactionClosed');
+
+    // Нельзя сторнировать переводы
+    if (original.type === WalletTxType.TRANSFER_OUT || original.type === WalletTxType.TRANSFER_IN) {
+      throw new BadRequestException('errors.cannotReverseTransfer');
+    }
+    if (original.reversedBy) throw new BadRequestException('errors.alreadyReversed');
+
+    await this.checkTransactAccess(original.wallet, userId);
+
+    return this.prisma.$transaction(async (tx) => {
+      // Создаём обратную транзакцию с отрицательной суммой
+      const reversal = await tx.walletTx.create({
+        data: {
+          walletId: original.walletId,
+          type: original.type,
+          currency: original.currency,
+          amount: original.amount,
+          toCurrency: original.toCurrency,
+          toAmount: original.toAmount ? -original.toAmount : null,
+          rate: original.rate,
+          isCustomRate: original.isCustomRate,
+          description: `Сторно: ${txId}`,
+          reversalOfId: txId,
+          createdById: userId,
+        },
+        include: {
+          createdBy: { select: { id: true, firstName: true, lastName: true } },
+          expenseType: true,
+        },
+      });
+
+      // Корректируем баланс: инвертируем эффект исходной транзакции
+      if (original.type === WalletTxType.INCOME) {
+        await tx.walletBalance.upsert({
+          where: { walletId_currency: { walletId: original.walletId, currency: original.currency } },
+          create: { walletId: original.walletId, currency: original.currency, amount: -original.amount },
+          update: { amount: { decrement: original.amount } },
+        });
+      } else if (original.type === WalletTxType.EXPENSE) {
+        await tx.walletBalance.upsert({
+          where: { walletId_currency: { walletId: original.walletId, currency: original.currency } },
+          create: { walletId: original.walletId, currency: original.currency, amount: original.amount },
+          update: { amount: { increment: original.amount } },
+        });
+      } else if (original.type === WalletTxType.CONVERSION && original.toCurrency && original.toAmount) {
+        // Возвращаем fromCurrency, снимаем toCurrency
+        await tx.walletBalance.upsert({
+          where: { walletId_currency: { walletId: original.walletId, currency: original.currency } },
+          create: { walletId: original.walletId, currency: original.currency, amount: original.amount },
+          update: { amount: { increment: original.amount } },
+        });
+        await tx.walletBalance.upsert({
+          where: { walletId_currency: { walletId: original.walletId, currency: original.toCurrency } },
+          create: { walletId: original.walletId, currency: original.toCurrency, amount: -original.toAmount },
+          update: { amount: { decrement: original.toAmount } },
+        });
+      }
+
+      return reversal;
     });
   }
 

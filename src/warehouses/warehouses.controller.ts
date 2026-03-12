@@ -112,6 +112,13 @@ export class WarehousesController {
     return this.warehousesService.createTransaction(id, dto, userId);
   }
 
+  @Post('transactions/:txId/reverse')
+  @RequireAnyPermission('warehouses.manage', 'warehouses.transaction', 'trips.admin')
+  @ApiOperation({ summary: 'Сторнировать транзакцию (создать обратную)' })
+  reverseTransaction(@Param('txId') txId: string, @CurrentUser('id') userId: string) {
+    return this.warehousesService.reverseTransaction(txId, userId);
+  }
+
   @Post('transfers/:txId/accept')
   @RequireAnyPermission('warehouses.manage', 'warehouses.transaction', 'trips.admin')
   @ApiOperation({ summary: 'Принять ожидающий перевод' })

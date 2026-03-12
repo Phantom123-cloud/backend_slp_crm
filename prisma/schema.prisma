@@ -445,6 +445,7 @@ model Transaction {
   note            String?
   pairId          String?
   transferStatus  TransferStatus?
+  reversalOfId    String?         @unique // ссылка на исходную транзакцию (для сторно)
   createdById     String
   createdAt       DateTime        @default(now())
 
@@ -452,6 +453,8 @@ model Transaction {
   toWarehouse     Warehouse?      @relation("ToWarehouse", fields: [toWarehouseId], references: [id])
   createdBy       User            @relation(fields: [createdById], references: [id])
   items           TransactionItem[]
+  reversalOf      Transaction?    @relation("TransactionReversal", fields: [reversalOfId], references: [id])
+  reversedBy      Transaction?    @relation("TransactionReversal")
 
   @@index([fromWarehouseId])
   @@index([toWarehouseId])
@@ -529,6 +532,13 @@ model WalletBalance {
   @@map("wallet_balances")
 }
 
+// Статус перевода между кошельками
+enum WalletTransferStatus {
+  PENDING    // ожидает подтверждения получателем
+  COMPLETED  // подтверждён
+  CANCELLED  // отменён отправителем
+}
+
 // Транзакция в кошельке
 model WalletTx {
   id           String       @id @default(uuid())
@@ -557,6 +567,11 @@ model WalletTx {
   closedById   String?
   closedBy     User?     @relation("WalletTxClosedBy", fields: [closedById], references: [id])
 
+  // Сторно: ссылка на исходную транзакцию
+  reversalOfId String?   @unique
+  reversalOf   WalletTx? @relation("WalletTxReversal", fields: [reversalOfId], references: [id])
+  reversedBy   WalletTx? @relation("WalletTxReversal")
+
   createdById  String
   createdBy    User      @relation("WalletTxCreatedBy", fields: [createdById], references: [id])
 
@@ -584,21 +599,22 @@ model WalletTxImage {
 
 // Перевод между кошельками (связывает две транзакции)
 model WalletTransfer {
-  id           String   @id @default(uuid())
+  id           String               @id @default(uuid())
   fromWalletId String
-  fromWallet   Wallet   @relation("WalletTransferFrom", fields: [fromWalletId], references: [id])
+  fromWallet   Wallet               @relation("WalletTransferFrom", fields: [fromWalletId], references: [id])
   toWalletId   String
-  toWallet     Wallet   @relation("WalletTransferTo", fields: [toWalletId], references: [id])
+  toWallet     Wallet               @relation("WalletTransferTo", fields: [toWalletId], references: [id])
 
-  outTxId      String   @unique
-  outTx        WalletTx @relation("WalletTransferOutTx", fields: [outTxId], references: [id])
-  inTxId       String   @unique
-  inTx         WalletTx @relation("WalletTransferInTx", fields: [inTxId], references: [id])
+  outTxId      String               @unique
+  outTx        WalletTx             @relation("WalletTransferOutTx", fields: [outTxId], references: [id])
+  inTxId       String?              @unique // null пока перевод PENDING
+  inTx         WalletTx?            @relation("WalletTransferInTx", fields: [inTxId], references: [id])
 
   currency     String
-  amount       Decimal  @db.Decimal(18, 4)
+  amount       Decimal              @db.Decimal(18, 4)
+  status       WalletTransferStatus @default(PENDING)
 
-  createdAt    DateTime @default(now())
+  createdAt    DateTime             @default(now())
 
   @@map("wallet_transfers")
 }
