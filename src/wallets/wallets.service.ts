@@ -650,7 +650,7 @@ export class WalletsService {
       const reversal = await tx.walletTx.create({
         data: {
           walletId: original.walletId,
-          type: original.type,
+          type: WalletTxType.REVERSAL,
           currency: original.currency,
           amount: original.amount,
           toCurrency: original.toCurrency,

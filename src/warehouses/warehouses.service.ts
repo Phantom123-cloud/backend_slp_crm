@@ -541,7 +541,7 @@ export class WarehousesService {
     return this.prisma.$transaction(async (tx) => {
       const reversal = await tx.transaction.create({
         data: {
-          type: original.type,
+          type: TransactionType.REVERSAL,
           fromWarehouseId: original.fromWarehouseId,
           toWarehouseId: original.toWarehouseId,
           source: original.source,

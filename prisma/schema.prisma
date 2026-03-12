@@ -375,6 +375,7 @@ enum TransactionType {
   WRITE_OFF
   TRANSFER_OUT
   TRANSFER_IN
+  REVERSAL     // Сторно (обратная транзакция)
 }
 
 // Источник прихода (только для INCOMING)
@@ -489,6 +490,7 @@ enum WalletTxType {
   TRANSFER_OUT // Исходящий перевод
   TRANSFER_IN  // Входящий перевод
   CONVERSION   // Конвертация валюты
+  REVERSAL     // Сторно (обратная транзакция)
 }
 
 model Wallet {
