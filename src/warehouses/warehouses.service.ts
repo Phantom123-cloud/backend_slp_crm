@@ -258,6 +258,17 @@ export class WarehousesService {
       const toWarehouse = await this.prisma.warehouse.findUnique({ where: { id: dto.toWarehouseId } });
       if (!toWarehouse) throw new NotFoundException('Destination warehouse not found');
 
+      // Лимит: не более 5 ожидающих исходящих / входящих переводов одновременно
+      const outgoingPending = await this.prisma.transaction.count({
+        where: { fromWarehouseId: warehouseId, type: TransactionType.TRANSFER_OUT, transferStatus: TransferStatus.PENDING },
+      });
+      if (outgoingPending >= 5) throw new BadRequestException('errors.tooManyPendingOutgoing');
+
+      const incomingPending = await this.prisma.transaction.count({
+        where: { toWarehouseId: dto.toWarehouseId!, type: TransactionType.TRANSFER_OUT, transferStatus: TransferStatus.PENDING },
+      });
+      if (incomingPending >= 5) throw new BadRequestException('errors.tooManyPendingIncoming');
+
       const pairId = uuidv4();
       return this.prisma.$transaction(async (tx) => {
         // TRANSFER_OUT with PENDING status — stores both sender and receiver

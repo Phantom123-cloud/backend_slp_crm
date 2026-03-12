@@ -359,6 +359,17 @@ export class WalletsService {
     if (toWallet.isBlocked) throw new BadRequestException('errors.destinationWalletBlocked');
     if (walletId === dto.toWalletId) throw new BadRequestException('errors.sameWallet');
 
+    // Лимит: не более 5 ожидающих исходящих / входящих переводов одновременно
+    const outgoingPending = await this.prisma.walletTransfer.count({
+      where: { fromWalletId: walletId, status: WalletTransferStatus.PENDING },
+    });
+    if (outgoingPending >= 5) throw new BadRequestException('errors.tooManyPendingOutgoing');
+
+    const incomingPending = await this.prisma.walletTransfer.count({
+      where: { toWalletId: dto.toWalletId, status: WalletTransferStatus.PENDING },
+    });
+    if (incomingPending >= 5) throw new BadRequestException('errors.tooManyPendingIncoming');
+
     if (dto.images && dto.images.length > 15) {
       throw new BadRequestException('errors.tooManyImages');
     }
