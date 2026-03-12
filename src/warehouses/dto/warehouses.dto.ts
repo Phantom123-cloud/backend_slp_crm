@@ -71,6 +71,11 @@ export class TransactionItemDto {
   quantity: number;
 }
 
+export enum IncomeSourceDto {
+  SUPPLIER = 'SUPPLIER',
+  SPV = 'SPV',
+}
+
 export class CreateTransactionDto {
   @ApiProperty({ enum: TransactionTypeDto })
   @IsEnum(TransactionTypeDto)
@@ -87,6 +92,11 @@ export class CreateTransactionDto {
   @IsString()
   toWarehouseId?: string;
 
+  @ApiPropertyOptional({ enum: IncomeSourceDto })
+  @IsOptional()
+  @IsEnum(IncomeSourceDto)
+  source?: IncomeSourceDto;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -98,4 +108,9 @@ export class UpdateTransactionDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @ApiPropertyOptional({ enum: IncomeSourceDto })
+  @IsOptional()
+  @IsEnum(IncomeSourceDto)
+  source?: IncomeSourceDto;
 }

@@ -377,6 +377,12 @@ enum TransactionType {
   TRANSFER_IN
 }
 
+// Источник прихода (только для INCOMING)
+enum IncomeSource {
+  SUPPLIER  // Поставщик
+  SPV       // СПВ (специалист по возвратам)
+}
+
 enum TransferStatus {
   PENDING
   COMPLETED
@@ -435,6 +441,7 @@ model Transaction {
   type            TransactionType
   fromWarehouseId String?
   toWarehouseId   String?
+  source          IncomeSource?   // только для INCOMING
   note            String?
   pairId          String?
   transferStatus  TransferStatus?

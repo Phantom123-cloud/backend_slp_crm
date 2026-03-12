@@ -281,6 +281,7 @@ export class WarehousesService {
           type: txType,
           ...fromOrTo,
           note: dto.note,
+          source: isIncoming ? (dto.source ?? null) : null,
           createdById: userId,
           items: {
             create: dto.items.map((item) => ({
@@ -476,7 +477,7 @@ export class WarehousesService {
     throw new ForbiddenException();
   }
 
-  async updateTransaction(txId: string, dto: { note?: string }, userId: string) {
+  async updateTransaction(txId: string, dto: { note?: string; source?: string }, userId: string) {
     const tx = await this.prisma.transaction.findUnique({
       where: { id: txId },
       include: {
@@ -498,7 +499,13 @@ export class WarehousesService {
 
     return this.prisma.transaction.update({
       where: { id: txId },
-      data: { note: dto.note !== undefined ? (dto.note || null) : undefined },
+      data: {
+        note: dto.note !== undefined ? (dto.note || null) : undefined,
+        // source менять только для INCOMING транзакций
+        source: dto.source !== undefined && tx.type === 'INCOMING'
+          ? (dto.source as any || null)
+          : undefined,
+      },
       include: {
         items: { include: { product: true } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
