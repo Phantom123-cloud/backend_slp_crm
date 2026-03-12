@@ -258,7 +258,7 @@ export class WalletsService {
         closedBy: { select: { id: true, firstName: true, lastName: true } },
         expenseType: { select: { id: true, name: true } },
         images: true,
-        reversalOf: { select: { id: true } },
+        reversalOf: { select: { id: true, type: true, amount: true, currency: true } },
         reversedBy: { select: { id: true } },
         transferOut: {
           include: {
