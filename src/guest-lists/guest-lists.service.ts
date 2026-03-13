@@ -39,6 +39,27 @@ interface FailedRow {
   error: string;
 }
 
+// DTO для создания записи гостя вручную
+export class CreateGuestRecordDto {
+  @IsOptional() @IsString() fullName?: string;
+  @IsOptional() @IsString() couponNumber?: string;
+  @IsOptional() @IsString() phone?: string;
+  @IsOptional() @IsString() phone2?: string;
+  @IsOptional() @IsString() phone3?: string;
+  @IsOptional() @IsNumber() guestsCount?: number | null;
+  @IsOptional() @IsNumber() pairsCount?: number | null;
+  @IsOptional() @IsNumber() passportCount?: number | null;
+  @IsOptional() @IsNumber() age?: number | null;
+  @IsOptional() @IsString() insteadOf?: string;
+  @IsOptional() @IsString() guestFullName?: string;
+  @IsOptional() @IsString() guestPhone?: string;
+  @IsOptional() @IsString() leftStatus?: string | null;
+  @IsOptional() @IsString() leftReason?: string | null;
+  @IsOptional() @IsString() @MaxLength(150) notes?: string;
+  @IsOptional() @IsNumber() presentationNumber?: number | null;
+  @IsOptional() @IsString() time?: string;
+}
+
 // DTO для обновления записи гостя
 export class UpdateGuestRecordDto {
   @IsOptional() @IsString() fullName?: string;
@@ -495,6 +516,82 @@ export class GuestListsService {
         presentation: { select: { id: true, name: true, time: true, number: true } },
       },
     });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Ручное создание записи гостя
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async createGuestRecord(guestListId: string, dto: CreateGuestRecordDto) {
+    const gl = await this.prisma.guestList.findUnique({ where: { id: guestListId } });
+    if (!gl) throw new NotFoundException('Список гостей не найден');
+
+    // Определяем presentationId по номеру презентации (если передан)
+    let presentationId: string | null = null;
+    let resolvedTime = dto.time || null;
+    if (dto.presentationNumber) {
+      const pres = await this.prisma.presentation.findFirst({
+        where: {
+          tripId: gl.tripId,
+          date: new Date(gl.date + 'T00:00:00.000Z'),
+          number: dto.presentationNumber,
+        },
+      });
+      if (pres) {
+        presentationId = pres.id;
+        if (!resolvedTime) resolvedTime = pres.time;
+      }
+    }
+
+    // Если presentationId не определён — берём первую презентацию на дату
+    if (!presentationId) {
+      const firstPres = await this.prisma.presentation.findFirst({
+        where: {
+          tripId: gl.tripId,
+          date: new Date(gl.date + 'T00:00:00.000Z'),
+        },
+        orderBy: { number: 'asc' },
+      });
+      if (!firstPres) {
+        throw new BadRequestException('На дату этого списка нет презентаций');
+      }
+      presentationId = firstPres.id;
+    }
+
+    const record = await this.prisma.guestRecord.create({
+      data: {
+        guestListId,
+        presentationId,
+        fullName: dto.fullName || null,
+        couponNumber: dto.couponNumber || null,
+        phone: dto.phone || '',
+        phone2: dto.phone2 || null,
+        phone3: dto.phone3 || null,
+        guestsCount: dto.guestsCount ?? null,
+        pairsCount: dto.pairsCount ?? null,
+        passportCount: dto.passportCount ?? null,
+        age: dto.age ?? null,
+        insteadOf: dto.insteadOf || null,
+        guestFullName: dto.guestFullName || null,
+        guestPhone: dto.guestPhone || null,
+        leftStatus: dto.leftStatus || null,
+        leftReason: dto.leftReason || null,
+        notes: dto.notes ? dto.notes.substring(0, 150) : null,
+        presentationNumber: dto.presentationNumber ?? null,
+        time: resolvedTime,
+      },
+      include: {
+        presentation: { select: { id: true, name: true, time: true, number: true } },
+      },
+    });
+
+    // Увеличиваем счётчик активных записей в списке
+    await this.prisma.guestList.update({
+      where: { id: guestListId },
+      data: { importedCount: { increment: 1 } },
+    });
+
+    return record;
   }
 
   // ──────────────────────────────────────────────────────────────────────────

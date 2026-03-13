@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { GuestListsService, UpdateGuestRecordDto } from './guest-lists.service';
+import { GuestListsService, UpdateGuestRecordDto, CreateGuestRecordDto } from './guest-lists.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -60,6 +60,15 @@ export class GuestListsController {
   @Get('guest-lists/:id')
   getGuestListById(@Param('id') id: string) {
     return this.service.getGuestListById(id);
+  }
+
+  // ── Ручное создание записи гостя ─────────────────────────────────────────
+  @Post('guest-lists/:id/records')
+  createRecord(
+    @Param('id') guestListId: string,
+    @Body() dto: CreateGuestRecordDto,
+  ) {
+    return this.service.createGuestRecord(guestListId, dto);
   }
 
   // ── Обновление записи гостя ───────────────────────────────────────────────
