@@ -12,7 +12,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { GuestListsService } from './guest-lists.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller()
 @UseGuards(JwtAuthGuard)
