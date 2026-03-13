@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   UploadedFile,
@@ -10,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { GuestListsService } from './guest-lists.service';
+import { GuestListsService, UpdateGuestRecordDto } from './guest-lists.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -19,18 +20,24 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class GuestListsController {
   constructor(private readonly service: GuestListsService) {}
 
+  // ── Уникальные даты выезда (для дропдауна импорта) ───────────────────────
+  @Get('trips/:tripId/guest-lists/dates')
+  getUniqueDates(@Param('tripId') tripId: string) {
+    return this.service.getUniqueDates(tripId);
+  }
+
   // ── Импорт CSV для выезда ─────────────────────────────────────────────────
   @Post('trips/:tripId/guest-lists/import')
   @UseInterceptors(FileInterceptor('file'))
   async importGuestList(
     @Param('tripId') tripId: string,
     @UploadedFile() file: Express.Multer.File,
-    @Body('presentationId') presentationId: string | undefined,
+    @Body('date') date: string,
     @CurrentUser('id') userId: string,
   ) {
     return this.service.importGuestList(
       tripId,
-      presentationId || undefined,
+      date,
       file.originalname,
       file.buffer,
       userId,
@@ -53,6 +60,16 @@ export class GuestListsController {
   @Get('guest-lists/:id')
   getGuestListById(@Param('id') id: string) {
     return this.service.getGuestListById(id);
+  }
+
+  // ── Обновление записи гостя ───────────────────────────────────────────────
+  @Patch('guest-lists/:id/records/:recordId')
+  updateRecord(
+    @Param('id') guestListId: string,
+    @Param('recordId') recordId: string,
+    @Body() dto: UpdateGuestRecordDto,
+  ) {
+    return this.service.updateGuestRecord(guestListId, recordId, dto);
   }
 
   // ── Удаление одной записи ─────────────────────────────────────────────────

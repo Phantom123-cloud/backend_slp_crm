@@ -165,6 +165,16 @@ export class PresentationsService {
     const number = this.getPresentationNumber(dto.time);
     const name = this.generatePresentationName(trip.teamName, date, number);
 
+    // Проверяем уникальность номера презентации в этот день
+    const existingWithSameNumber = await this.prisma.presentation.findFirst({
+      where: { tripId, date, number },
+    });
+    if (existingWithSameNumber) {
+      throw new BadRequestException(
+        `На дату ${dto.date} уже есть презентация №${number}. В один день допускается максимум 3 презентации (утро=1, день=2, вечер=3) без повторений.`,
+      );
+    }
+
     // Create presentation
     const presentation = await this.prisma.presentation.create({
       data: {
@@ -221,6 +231,16 @@ export class PresentationsService {
 
       const number = this.getPresentationNumber(time);
       const name = this.generatePresentationName(trip!.teamName, date, number);
+
+      // Проверяем уникальность номера (исключая текущую презентацию)
+      const conflict = await this.prisma.presentation.findFirst({
+        where: { tripId: presentation.tripId, date, number, id: { not: id } },
+      });
+      if (conflict) {
+        throw new BadRequestException(
+          `На эту дату уже есть презентация №${number}. Допускается не более одной презентации каждого номера (1/2/3) в день.`,
+        );
+      }
 
       updateData.date = date;
       updateData.time = time;

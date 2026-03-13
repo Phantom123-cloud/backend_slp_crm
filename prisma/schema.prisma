@@ -303,7 +303,6 @@ model Presentation {
 
   crew            PresentationCrew[]
   summaryRows     PresentationSummary[]
-  guestLists      GuestList[]
   guestRecords    GuestRecord[]
 
   @@map("presentations")
@@ -644,55 +643,82 @@ model ExpenseType {
 
 // ==================== GUEST LISTS ====================
 
-// Список гостей — один батч импорта, привязан к выезду + презентации
+// Список гостей — один батч импорта, привязан к выезду и конкретной дате
 model GuestList {
-  id             String          @id @default(uuid())
-  tripId         String
-  trip           Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  presentationId String?
-  presentation   Presentation?   @relation(fields: [presentationId], references: [id])
-  fileName       String          // оригинальное имя csv-файла
-  totalCount     Int             @default(0)   // всего строк в файле
-  importedCount  Int             @default(0)   // успешно импортировано
-  failedCount    Int             @default(0)   // не прошло валидацию
-  guests         GuestRecord[]
-  logs           GuestImportLog[]
-  createdAt      DateTime        @default(now())
-  createdById    String
-  createdBy      User            @relation("GuestListCreatedBy", fields: [createdById], references: [id])
+  id              String          @id @default(uuid())
+  tripId          String
+  trip            Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  date            String          // "YYYY-MM-DD" — выбранная дата при импорте
+  fileName        String          // оригинальное имя csv-файла
+  totalCount      Int             @default(0)   // всего строк в файле (без дублей внутри файла)
+  importedCount   Int             @default(0)   // успешно импортировано
+  failedCount     Int             @default(0)   // не прошло валидацию
+  duplicatesCount Int             @default(0)   // дублей по телефону внутри файла
+  guests          GuestRecord[]
+  logs            GuestImportLog[]
+  createdAt       DateTime        @default(now())
+  createdById     String
+  createdBy       User            @relation("GuestListCreatedBy", fields: [createdById], references: [id])
 
   @@map("guest_lists")
 }
 
 // Запись одного гостя в списке
 model GuestRecord {
-  id             String       @id @default(uuid())
-  guestListId    String
-  guestList      GuestList    @relation(fields: [guestListId], references: [id], onDelete: Cascade)
-  presentationId String
-  presentation   Presentation @relation(fields: [presentationId], references: [id])
-  fullName       String?      // ФИО (может отсутствовать)
-  phone          String       // номер телефона
-  createdAt      DateTime     @default(now())
+  id                 String       @id @default(uuid())
+  guestListId        String
+  guestList          GuestList    @relation(fields: [guestListId], references: [id], onDelete: Cascade)
+  presentationId     String
+  presentation       Presentation @relation(fields: [presentationId], references: [id])
+
+  // ── Основные поля из CSV ───────────────────────────────────────────────────
+  fullName           String?      // ФИО
+  couponNumber       String?      // № купона
+  phone              String       // Телефон 1
+  phone2             String?      // Телефон 2
+  phone3             String?      // Телефон 3
+
+  // ── Числовые характеристики ────────────────────────────────────────────────
+  guestsCount        Int?         // Гости (0 = один, 1 = пришёл с одним доп. гостем)
+  pairsCount         Int?         // Пары
+  passportCount      Int?         // Паспорт
+  age                Int?         // Возраст
+
+  // ── Дополнительная информация ─────────────────────────────────────────────
+  insteadOf          String?      // Вместо
+  guestFullName      String?      // ФИО Гостя
+  guestPhone         String?      // Телефон Гостя
+
+  // ── Статус на презентации ─────────────────────────────────────────────────
+  leftStatus         String?      // "не пустили" | "ушел"
+  leftReason         String?      // Причина (из справочника)
+  notes              String?      @db.VarChar(150) // Заметки до 150 символов
+
+  // ── Привязка к слоту ──────────────────────────────────────────────────────
+  presentationNumber Int?         // 1 / 2 / 3 — номер презентации
+  time               String?      // Время (по дефолту из CSV, меняется при смене слота)
+
+  createdAt          DateTime     @default(now())
 
   @@map("guest_records")
 }
 
 // Лог каждой операции импорта или удаления-по-файлу
 model GuestImportLog {
-  id            String     @id @default(uuid())
-  tripId        String
-  trip          Trip       @relation(fields: [tripId], references: [id], onDelete: Cascade)
-  guestListId   String?
-  guestList     GuestList? @relation(fields: [guestListId], references: [id], onDelete: SetNull)
-  action        String     // 'IMPORT' | 'DELETE_BY_FILE'
-  fileName      String
-  totalCount    Int
-  importedCount Int
-  failedCount   Int
-  createdAt     DateTime   @default(now())
-  createdById   String
-  createdBy     User       @relation("GuestImportLogCreatedBy", fields: [createdById], references: [id])
+  id              String     @id @default(uuid())
+  tripId          String
+  trip            Trip       @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  guestListId     String?
+  guestList       GuestList? @relation(fields: [guestListId], references: [id], onDelete: SetNull)
+  action          String     // 'IMPORT' | 'DELETE_BY_FILE'
+  fileName        String
+  totalCount      Int
+  importedCount   Int
+  failedCount     Int
+  duplicatesCount Int        @default(0)
+  createdAt       DateTime   @default(now())
+  createdById     String
+  createdBy       User       @relation("GuestImportLogCreatedBy", fields: [createdById], references: [id])
 
   @@map("guest_import_logs")
 }
