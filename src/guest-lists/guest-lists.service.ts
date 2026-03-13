@@ -403,6 +403,38 @@ export class GuestListsService {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
+  // Глобальный список всех guest-lists (для отдельной страницы)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async getAllGuestLists() {
+    const lists = await this.prisma.guestList.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+        trip: { select: { id: true, name: true } },
+        _count: { select: { guests: true } },
+      },
+    });
+
+    // Для каждого списка подтягиваем презентации на его дату
+    const tripIds = [...new Set(lists.map((gl) => gl.tripId))];
+    const allPresentations = await this.prisma.presentation.findMany({
+      where: { tripId: { in: tripIds } },
+      select: {
+        id: true, name: true, date: true, time: true, number: true, tripId: true,
+        venue: { select: { city: true, address: true, venueName: true } },
+      },
+    });
+
+    return lists.map((gl) => {
+      const datePresentations = allPresentations.filter(
+        (p) => p.tripId === gl.tripId && p.date.toISOString().split('T')[0] === gl.date,
+      );
+      return { ...gl, datePresentations };
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
   // Список гостей выезда
   // ──────────────────────────────────────────────────────────────────────────
 

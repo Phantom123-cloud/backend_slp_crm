@@ -20,6 +20,12 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class GuestListsController {
   constructor(private readonly service: GuestListsService) {}
 
+  // ── Глобальный список всех guest-lists ───────────────────────────────────
+  @Get('guest-lists')
+  getAllGuestLists() {
+    return this.service.getAllGuestLists();
+  }
+
   // ── Уникальные даты выезда (для дропдауна импорта) ───────────────────────
   @Get('trips/:tripId/guest-lists/dates')
   getUniqueDates(@Param('tripId') tripId: string) {
