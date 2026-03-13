@@ -118,6 +118,10 @@ model User {
   walletTxsCreated    WalletTx[]    @relation("WalletTxCreatedBy")
   walletTxsClosed     WalletTx[]    @relation("WalletTxClosedBy")
 
+  // Guest lists relations
+  guestListsCreated      GuestList[]      @relation("GuestListCreatedBy")
+  guestImportLogsCreated GuestImportLog[] @relation("GuestImportLogCreatedBy")
+
   @@map("users")
 }
 
@@ -252,6 +256,8 @@ model Trip {
   presentations   Presentation[]
   warehouse       Warehouse?
   wallet          Wallet?
+  guestLists      GuestList[]
+  importLogs      GuestImportLog[]
 
   @@map("trips")
 }
@@ -297,6 +303,8 @@ model Presentation {
 
   crew            PresentationCrew[]
   summaryRows     PresentationSummary[]
+  guestLists      GuestList[]
+  guestRecords    GuestRecord[]
 
   @@map("presentations")
 }
@@ -632,6 +640,61 @@ model ExpenseType {
   walletTxs WalletTx[]
 
   @@map("expense_types")
+}
+
+// ==================== GUEST LISTS ====================
+
+// Список гостей — один батч импорта, привязан к выезду + презентации
+model GuestList {
+  id             String          @id @default(uuid())
+  tripId         String
+  trip           Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  presentationId String?
+  presentation   Presentation?   @relation(fields: [presentationId], references: [id])
+  fileName       String          // оригинальное имя csv-файла
+  totalCount     Int             @default(0)   // всего строк в файле
+  importedCount  Int             @default(0)   // успешно импортировано
+  failedCount    Int             @default(0)   // не прошло валидацию
+  guests         GuestRecord[]
+  logs           GuestImportLog[]
+  createdAt      DateTime        @default(now())
+  createdById    String
+  createdBy      User            @relation("GuestListCreatedBy", fields: [createdById], references: [id])
+
+  @@map("guest_lists")
+}
+
+// Запись одного гостя в списке
+model GuestRecord {
+  id             String       @id @default(uuid())
+  guestListId    String
+  guestList      GuestList    @relation(fields: [guestListId], references: [id], onDelete: Cascade)
+  presentationId String
+  presentation   Presentation @relation(fields: [presentationId], references: [id])
+  fullName       String?      // ФИО (может отсутствовать)
+  phone          String       // номер телефона
+  createdAt      DateTime     @default(now())
+
+  @@map("guest_records")
+}
+
+// Лог каждой операции импорта или удаления-по-файлу
+model GuestImportLog {
+  id            String     @id @default(uuid())
+  tripId        String
+  trip          Trip       @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  guestListId   String?
+  guestList     GuestList? @relation(fields: [guestListId], references: [id], onDelete: SetNull)
+  action        String     // 'IMPORT' | 'DELETE_BY_FILE'
+  fileName      String
+  totalCount    Int
+  importedCount Int
+  failedCount   Int
+  createdAt     DateTime   @default(now())
+  createdById   String
+  createdBy     User       @relation("GuestImportLogCreatedBy", fields: [createdById], references: [id])
+
+  @@map("guest_import_logs")
 }
 
 // ==================== AUDIT LOG ====================
