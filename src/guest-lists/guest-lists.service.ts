@@ -516,6 +516,14 @@ export class GuestListsService {
     });
     if (!record) throw new NotFoundException('Запись не найдена');
 
+    // Проверка уникальности купона (не считая текущую запись)
+    if (dto.couponNumber && dto.couponNumber !== record.couponNumber) {
+      const existing = await this.prisma.guestRecord.findFirst({
+        where: { guestListId, couponNumber: dto.couponNumber, id: { not: recordId } },
+      });
+      if (existing) throw new BadRequestException('errors.couponDuplicate');
+    }
+
     const updateData: any = { ...dto };
 
     // Если изменился номер презентации — обновляем время и presentationId
@@ -554,9 +562,40 @@ export class GuestListsService {
   // Ручное создание записи гостя
   // ──────────────────────────────────────────────────────────────────────────
 
+  // Проверяем, есть ли вручную заполненные данные (запрет удаления)
+  private hasFilledData(record: any): boolean {
+    return !!(
+      record.leftStatus ||
+      record.leftReason ||
+      record.passportCount !== null ||
+      record.insteadOf ||
+      record.guestFullName ||
+      record.guestPhone ||
+      record.notes ||
+      record.phone2 ||
+      record.phone3
+    );
+  }
+
   async createGuestRecord(guestListId: string, dto: CreateGuestRecordDto) {
     const gl = await this.prisma.guestList.findUnique({ where: { id: guestListId } });
     if (!gl) throw new NotFoundException('Список гостей не найден');
+
+    // Проверка уникальности купона внутри списка
+    if (dto.couponNumber) {
+      const existing = await this.prisma.guestRecord.findFirst({
+        where: { guestListId, couponNumber: dto.couponNumber },
+      });
+      if (existing) throw new BadRequestException('errors.couponDuplicate');
+    }
+
+    // Проверка дубля по телефону внутри списка
+    if (dto.phone) {
+      const existing = await this.prisma.guestRecord.findFirst({
+        where: { guestListId, phone: dto.phone },
+      });
+      if (existing) throw new BadRequestException('errors.phoneDuplicate');
+    }
 
     // Определяем presentationId по номеру презентации (если передан)
     let presentationId: string | null = null;
@@ -635,6 +674,12 @@ export class GuestListsService {
       where: { id: recordId, guestListId },
     });
     if (!record) throw new NotFoundException('Запись не найдена');
+
+    // Запрет удаления если вручную внесены данные
+    if (this.hasFilledData(record)) {
+      throw new BadRequestException('errors.recordHasData');
+    }
+
     await this.prisma.guestRecord.delete({ where: { id: recordId } });
     await this.prisma.guestList.update({
       where: { id: guestListId },
