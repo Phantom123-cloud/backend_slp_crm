@@ -191,6 +191,12 @@ export class GuestListsService {
         // Новый: 18 колонок — полная структура
         // Старый/короткий: ≤4 колонок — ФИО, Телефон, Дата, Время
         if (c.length >= 17) {
+          // Полный формат (18 колонок):
+          // 0:ФИО, 1:№купона, 2:Телефон1, 3:Телефон2, 4:Телефон3,
+          // 5:Гости, 6:Пары, 7:Паспорт, 8:Возраст, 9:Вместо,
+          // 10:ФИО Гостя, 11:ТелефонГостя, 12:Ушедшие/Невпущенные, 13:Причина,
+          // 14:Смс (пропускаем), 15:Заметки, 16:Презентация№, 17:Время
+          // Дата не в файле — передаётся через selectedDate при вызове импорта
           return {
             fullName: c[0] ?? '',
             couponNumber: c[1] ?? '',
@@ -206,10 +212,10 @@ export class GuestListsService {
             guestPhone: c[11] ?? '',
             leftStatus: c[12] ?? '',
             leftReason: c[13] ?? '',
-            notes: c[14] ?? '',
-            presentationNumber: c[15] ?? '',
-            time: c[16] ?? '',
-            date: c[17] ?? '',
+            notes: c[15] ?? '',           // c[14] = Смс (пропускаем), c[15] = Заметки
+            presentationNumber: c[16] ?? '',  // Презентация№
+            time: c[17] ?? '',            // Время
+            date: '',                      // Дата берётся из selectedDate (не в файле)
           } as CsvRow;
         }
         // Короткий формат: ФИО, Телефон, Дата, Время
@@ -359,17 +365,22 @@ export class GuestListsService {
     const failedRows: FailedRow[] = [];
 
     for (const row of uniqueRows) {
-      // Валидируем дату строки
-      const normDate = this.normalizeDate(row.date);
-      if (!normDate) {
-        failedRows.push({ fullName: row.fullName, phone: row.phone, date: row.date, time: row.time, error: 'Неверный формат даты' });
-        continue;
-      }
-
-      // Дата строки должна совпадать с выбранной датой
-      if (normDate !== selectedDate) {
-        failedRows.push({ fullName: row.fullName, phone: row.phone, date: row.date, time: row.time, error: `Дата ${row.date} не совпадает с выбранной датой (${selectedDate})` });
-        continue;
+      // Если дата не указана в файле (18-колоночный формат) — берём selectedDate
+      let normDate: string;
+      if (!row.date) {
+        normDate = selectedDate;
+      } else {
+        const parsed = this.normalizeDate(row.date);
+        if (!parsed) {
+          failedRows.push({ fullName: row.fullName, phone: row.phone, date: row.date, time: row.time, error: 'Неверный формат даты' });
+          continue;
+        }
+        // Дата строки должна совпадать с выбранной датой
+        if (parsed !== selectedDate) {
+          failedRows.push({ fullName: row.fullName, phone: row.phone, date: row.date, time: row.time, error: `Дата ${row.date} не совпадает с выбранной датой (${selectedDate})` });
+          continue;
+        }
+        normDate = parsed;
       }
 
       // Нормализуем время
