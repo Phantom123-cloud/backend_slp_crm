@@ -415,7 +415,9 @@ export class GuestListsService {
         leftReason: row.leftReason || '',
         notes: (row.notes || '').substring(0, 150),
         presentationId: matched.presId,
-        presentationNumber: matched.number,
+        // presentationNumber проставляется только когда гостя «заполнят» (внесут guestsCount)
+        // до этого null → при сортировке такие строки уходят вниз
+        presentationNumber: null,
         time: normTime,
       });
     }
@@ -617,7 +619,7 @@ export class GuestListsService {
 
     const updateData: any = { ...dto };
 
-    // Если изменился номер презентации — обновляем время и presentationId
+    // Если явно изменился номер презентации — обновляем время и presentationId
     if (
       dto.presentationNumber !== undefined &&
       dto.presentationNumber !== null &&
@@ -636,6 +638,27 @@ export class GuestListsService {
         // Время берём из новой презентации, если явно не передано
         if (!dto.time) {
           updateData.time = pres.time;
+        }
+      }
+    }
+
+    // Авто-присвоение presentationNumber: когда впервые заполняется guestsCount
+    // (гость «пришёл») — достаём номер из связанной презентации.
+    // Это позволяет таблице автоматически сортировать пришедших вверх.
+    if (
+      dto.guestsCount !== undefined &&
+      dto.guestsCount !== null &&
+      record.presentationNumber === null &&
+      updateData.presentationNumber === undefined  // явно не переданный номер
+    ) {
+      const linkedPresId = updateData.presentationId ?? record.presentationId;
+      if (linkedPresId) {
+        const pres = await this.prisma.presentation.findUnique({
+          where: { id: linkedPresId },
+          select: { number: true },
+        });
+        if (pres) {
+          updateData.presentationNumber = pres.number;
         }
       }
     }
