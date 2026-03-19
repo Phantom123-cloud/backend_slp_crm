@@ -681,7 +681,10 @@ export class GuestListsService {
     return !!(
       record.leftStatus ||
       record.leftReason ||
+      record.guestsCount !== null ||
+      record.pairsCount !== null ||
       record.passportCount !== null ||
+      record.age !== null ||
       record.insteadOf ||
       record.guestFullName ||
       record.guestPhone ||
