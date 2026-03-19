@@ -134,7 +134,7 @@ export class GuestListsService {
   // ──────────────────────────────────────────────────────────────────────────
 
   /** Разбиваем строку CSV с учётом значений в кавычках */
-  private splitCsvLine(line: string): string[] {
+  private splitCsvLine(line: string, delimiter = ','): string[] {
     const result: string[] = [];
     let current = '';
     let inQuotes = false;
@@ -142,7 +142,7 @@ export class GuestListsService {
       const ch = line[i];
       if (ch === '"') {
         inQuotes = !inQuotes;
-      } else if (ch === ',' && !inQuotes) {
+      } else if (ch === delimiter && !inQuotes) {
         result.push(current.trim());
         current = '';
       } else {
@@ -151,6 +151,13 @@ export class GuestListsService {
     }
     result.push(current.trim());
     return result;
+  }
+
+  /** Определяет разделитель CSV по первой строке (поддерживает ',' и ';') */
+  private detectDelimiter(firstLine: string): string {
+    const semicolons = (firstLine.match(/;/g) || []).length;
+    const commas = (firstLine.match(/,/g) || []).length;
+    return semicolons >= commas ? ';' : ',';
   }
 
   /**
@@ -169,14 +176,17 @@ export class GuestListsService {
     const lines = text.split('\n').filter((l) => l.trim());
     if (lines.length === 0) return [];
 
+    // Автодетект разделителя по первой строке
+    const delimiter = this.detectDelimiter(lines[0]);
+
     // Определяем заголовок: первая строка содержит нецифровые слова
-    const firstCell = this.splitCsvLine(lines[0])[0].trim().toLowerCase();
+    const firstCell = this.splitCsvLine(lines[0], delimiter)[0].trim().toLowerCase();
     const hasHeader = isNaN(Number(firstCell)) && !firstCell.match(/^\d{6,}/);
     const dataLines = hasHeader ? lines.slice(1) : lines;
 
     return dataLines
       .map((line) => {
-        const c = this.splitCsvLine(line);
+        const c = this.splitCsvLine(line, delimiter);
         // Определяем формат по числу колонок
         // Новый: 18 колонок — полная структура
         // Старый/короткий: ≤4 колонок — ФИО, Телефон, Дата, Время
@@ -235,6 +245,13 @@ export class GuestListsService {
     if (dmyMatch) {
       const [, d, m, y] = dmyMatch;
       return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    // DD.MM (без года — используем текущий год)
+    const dmMatch = raw.match(/^(\d{1,2})\.(\d{1,2})$/);
+    if (dmMatch) {
+      const [, d, m] = dmMatch;
+      const year = new Date().getFullYear();
+      return `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
     // YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
@@ -770,10 +787,12 @@ export class GuestListsService {
     const gl = await this.prisma.guestList.findUnique({ where: { id: guestListId } });
     if (!gl) throw new NotFoundException('Список гостей не найден');
 
-    const text = buffer.toString('utf-8').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    const phones = text
-      .split('\n')
-      .map((l) => l.split(',')[0].trim().replace(/^"|"$/g, '').replace(/\D/g, ''))
+    const text = buffer.toString('utf-8').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const fileLines = text.split('\n').filter((l) => l.trim());
+    // Автодетект разделителя
+    const delim = fileLines.length > 0 ? this.detectDelimiter(fileLines[0]) : ',';
+    const phones = fileLines
+      .map((l) => l.split(delim)[0].trim().replace(/^"|"$/g, '').replace(/\D/g, ''))
       .filter((p) => p.length >= 7);
 
     if (phones.length === 0) {
