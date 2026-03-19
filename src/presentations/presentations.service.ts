@@ -218,6 +218,11 @@ export class PresentationsService {
       where: { id: presentation.tripId },
     });
 
+    // Редактирование запрещено для закрытого выезда
+    if (trip?.status === 'CLOSED') {
+      throw new ForbiddenException('errors.tripIsClosed');
+    }
+
     const updateData: any = {};
 
     if (dto.date || dto.time) {

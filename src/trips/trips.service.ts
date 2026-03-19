@@ -389,6 +389,20 @@ export class TripsService {
           throw new BadRequestException('errors.tripWarehousePendingTransfers');
         }
       }
+
+      // Проверяем баланс TRIP-кошелька — все валюты должны быть равны 0
+      const tripWallet = await this.prisma.wallet.findUnique({
+        where: { tripId: id },
+        include: { balances: true },
+      });
+      if (tripWallet) {
+        const nonZeroBalance = tripWallet.balances.filter(
+          (b) => Number(b.amount) !== 0,
+        );
+        if (nonZeroBalance.length > 0) {
+          throw new BadRequestException('errors.tripWalletNotEmpty');
+        }
+      }
     }
 
     const updated = await this.prisma.trip.update({
