@@ -73,6 +73,12 @@ async function main() {
     { name: 'Транзакции по своим кошелькам', slug: 'wallets.transaction', group: 'wallets', description: 'Транзакции в кошельках/конвертации/переводы, где назначен ответственным' },
     { name: 'Управление кошельками', slug: 'wallets.manage', group: 'wallets', description: 'Полное управление всеми кошельками' },
     { name: 'Аудитор кошельков', slug: 'wallets.auditor', group: 'wallets', description: 'Закрытие транзакций (блокировка редактирования)' },
+    // Guest Lists
+    { name: 'Просмотр всех списков гостей', slug: 'guest_lists.view-all', group: 'guest_lists', description: 'Просмотр всех списков гостей в системе, скачивание файлов, история импорта' },
+    { name: 'Просмотр своих списков гостей', slug: 'guest_lists.view-person', group: 'guest_lists', description: 'Просмотр списков гостей выездов, в которых пользователь является членом команды, скачивание файлов, история импорта' },
+    { name: 'Создание списков гостей', slug: 'guest_lists.create', group: 'guest_lists', description: 'Импорт CSV и создание списков гостей' },
+    { name: 'Заполнение списков гостей', slug: 'guest_lists.fill', group: 'guest_lists', description: 'Заполнение отметок по гостям вручную, редактирование записей' },
+    { name: 'Удаление из списков гостей', slug: 'guest_lists.delete', group: 'guest_lists', description: 'Удаление записей гостей вручную и через файл с телефонами' },
   ];
 
   const createdPerms: Record<string, string> = {};

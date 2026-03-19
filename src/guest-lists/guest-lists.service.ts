@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { IsString, IsInt, IsOptional, MaxLength, IsNumber } from 'class-validator';
 import { PrismaService } from '../prisma/prisma.service';
@@ -84,6 +85,49 @@ export class UpdateGuestRecordDto {
 @Injectable()
 export class GuestListsService {
   constructor(private prisma: PrismaService) {}
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Helpers: права доступа
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /** Возвращает slugи прав текущего пользователя */
+  private async getUserPerms(userId: string): Promise<string[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { role: { include: { permissions: { include: { permission: true } } } } },
+    });
+    if (!user?.role) return [];
+    return user.role.permissions.map((rp) => rp.permission.slug);
+  }
+
+  /** Проверяет, является ли пользователь участником команды выезда */
+  private async isCrewOfTrip(tripId: string, userId: string): Promise<boolean> {
+    const crew = await this.prisma.tripCrew.findFirst({ where: { tripId, userId } });
+    return !!crew;
+  }
+
+  /**
+   * Проверяет доступ к спискам конкретного выезда.
+   * view-all → всегда OK.
+   * Любое другое guest_lists.* → нужно быть в составе выезда.
+   */
+  private async checkTripAccess(tripId: string, userId: string): Promise<void> {
+    const perms = await this.getUserPerms(userId);
+    if (perms.includes('guest_lists.view-all')) return;
+    const hasAny = perms.some((p) => p.startsWith('guest_lists.'));
+    if (hasAny && await this.isCrewOfTrip(tripId, userId)) return;
+    throw new ForbiddenException();
+  }
+
+  /**
+   * Проверяет доступ к конкретному списку гостей по его id.
+   * Используется в методах чтения/записи конкретного списка.
+   */
+  private async checkListAccess(guestListId: string, userId: string): Promise<void> {
+    const gl = await this.prisma.guestList.findUnique({ where: { id: guestListId }, select: { tripId: true } });
+    if (!gl) throw new NotFoundException('Список гостей не найден');
+    await this.checkTripAccess(gl.tripId, userId);
+  }
 
   // ──────────────────────────────────────────────────────────────────────────
   // Парсинг CSV
@@ -223,6 +267,7 @@ export class GuestListsService {
     buffer: Buffer,
     userId: string,
   ) {
+    await this.checkTripAccess(tripId, userId);
     // 1. Получаем презентации выезда НА ВЫБРАННУЮ ДАТУ
     const targetDate = new Date(selectedDate + 'T00:00:00.000Z');
     const presentations = await this.prisma.presentation.findMany({
@@ -406,8 +451,19 @@ export class GuestListsService {
   // Глобальный список всех guest-lists (для отдельной страницы)
   // ──────────────────────────────────────────────────────────────────────────
 
-  async getAllGuestLists() {
+  async getAllGuestLists(userId: string) {
+    const perms = await this.getUserPerms(userId);
+    const viewAll = perms.includes('guest_lists.view-all');
+
+    // Если нет view-all — показываем только списки выездов, в которых пользователь является членом команды
+    let tripIdFilter: string[] | undefined;
+    if (!viewAll) {
+      const crewRows = await this.prisma.tripCrew.findMany({ where: { userId }, select: { tripId: true } });
+      tripIdFilter = crewRows.map((r) => r.tripId);
+    }
+
     const lists = await this.prisma.guestList.findMany({
+      where: tripIdFilter ? { tripId: { in: tripIdFilter } } : undefined,
       orderBy: { createdAt: 'desc' },
       include: {
         createdBy: { select: { id: true, firstName: true, lastName: true } },
@@ -438,7 +494,9 @@ export class GuestListsService {
   // Список гостей выезда
   // ──────────────────────────────────────────────────────────────────────────
 
-  async getGuestLists(tripId: string) {
+  async getGuestLists(tripId: string, userId: string) {
+    await this.checkTripAccess(tripId, userId);
+
     const lists = await this.prisma.guestList.findMany({
       where: { tripId },
       orderBy: { createdAt: 'desc' },
@@ -469,7 +527,9 @@ export class GuestListsService {
   // Детали списка
   // ──────────────────────────────────────────────────────────────────────────
 
-  async getGuestListById(id: string) {
+  async getGuestListById(id: string, userId: string) {
+    await this.checkListAccess(id, userId);
+
     const gl = await this.prisma.guestList.findUnique({
       where: { id },
       include: {
@@ -510,7 +570,10 @@ export class GuestListsService {
     guestListId: string,
     recordId: string,
     dto: UpdateGuestRecordDto,
+    userId: string,
   ) {
+    await this.checkListAccess(guestListId, userId);
+
     const record = await this.prisma.guestRecord.findFirst({
       where: { id: recordId, guestListId },
     });
@@ -577,7 +640,9 @@ export class GuestListsService {
     );
   }
 
-  async createGuestRecord(guestListId: string, dto: CreateGuestRecordDto) {
+  async createGuestRecord(guestListId: string, dto: CreateGuestRecordDto, userId: string) {
+    await this.checkListAccess(guestListId, userId);
+
     const gl = await this.prisma.guestList.findUnique({ where: { id: guestListId } });
     if (!gl) throw new NotFoundException('Список гостей не найден');
 
@@ -669,7 +734,9 @@ export class GuestListsService {
   // Удаление одной записи
   // ──────────────────────────────────────────────────────────────────────────
 
-  async deleteGuestRecord(guestListId: string, recordId: string) {
+  async deleteGuestRecord(guestListId: string, recordId: string, userId: string) {
+    await this.checkListAccess(guestListId, userId);
+
     const record = await this.prisma.guestRecord.findFirst({
       where: { id: recordId, guestListId },
     });
@@ -698,6 +765,8 @@ export class GuestListsService {
     buffer: Buffer,
     userId: string,
   ) {
+    await this.checkListAccess(guestListId, userId);
+
     const gl = await this.prisma.guestList.findUnique({ where: { id: guestListId } });
     if (!gl) throw new NotFoundException('Список гостей не найден');
 
@@ -743,7 +812,9 @@ export class GuestListsService {
   // История импортов
   // ──────────────────────────────────────────────────────────────────────────
 
-  async getImportLogs(tripId: string) {
+  async getImportLogs(tripId: string, userId: string) {
+    await this.checkTripAccess(tripId, userId);
+
     return this.prisma.guestImportLog.findMany({
       where: { tripId },
       orderBy: { createdAt: 'desc' },
@@ -758,7 +829,9 @@ export class GuestListsService {
   // Уникальные даты выезда (для дропдауна при импорте)
   // ──────────────────────────────────────────────────────────────────────────
 
-  async getUniqueDates(tripId: string) {
+  async getUniqueDates(tripId: string, userId: string) {
+    await this.checkTripAccess(tripId, userId);
+
     const presentations = await this.prisma.presentation.findMany({
       where: { tripId },
       select: {
