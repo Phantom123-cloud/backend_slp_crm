@@ -79,6 +79,8 @@ async function main() {
     { name: 'Создание списков гостей', slug: 'guest_lists.create', group: 'guest_lists', description: 'Импорт CSV и создание списков гостей' },
     { name: 'Заполнение списков гостей', slug: 'guest_lists.fill', group: 'guest_lists', description: 'Заполнение отметок по гостям вручную, редактирование записей' },
     { name: 'Удаление из списков гостей', slug: 'guest_lists.delete', group: 'guest_lists', description: 'Удаление записей гостей вручную и через файл с телефонами' },
+    // Statistics
+    { name: 'Просмотр статистики презентаций', slug: 'statistics.presentations', group: 'statistics', description: 'Доступ к разделу статистики презентаций: сводные данные по гостям, итогам и результатам по датам, ведущим, координаторам и индивидуально' },
   ];
 
   const createdPerms: Record<string, string> = {};
