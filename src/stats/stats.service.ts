@@ -235,6 +235,8 @@ export class StatsService {
           guestRecords: {
             select: { guestsCount: true, pairsCount: true, leftStatus: true },
           },
+          type: { select: { id: true, name: true } },
+          venue: { select: { id: true, venueName: true, address: true, city: true } },
         },
       });
     } else {
@@ -263,6 +265,8 @@ export class StatsService {
           guestRecords: {
             select: { guestsCount: true, pairsCount: true, leftStatus: true },
           },
+          type: { select: { id: true, name: true } },
+          venue: { select: { id: true, venueName: true, address: true, city: true } },
         },
       });
     }
@@ -319,6 +323,12 @@ export class StatsService {
           label = `${pres.trip.teamName} (${startFmt}–${endFmt})`;
           break;
         }
+        case 'presentation': {
+          // Каждая презентация — отдельная строка
+          key = pres.id;
+          label = pres.name;
+          break;
+        }
         default: {
           // month
           const y = date.getFullYear();
@@ -356,8 +366,32 @@ export class StatsService {
       );
     }
 
-    // Сортируем по ключу (хронологически)
-    rows.sort((a, b) => a.key.localeCompare(b.key));
+    // Добавляем доп. поля для группировки по презентациям
+    if (groupBy === 'presentation') {
+      for (const row of rows) {
+        const p = (groups.get(row.key) as any)?.pres[0];
+        if (p) {
+          // Дата в формате dd.MM.yyyy
+          const d = new Date(p.date);
+          row.presDate = formatDMY(d);
+          row.presDateSort = d.toISOString().substring(0, 10);
+          row.presTime = p.time ?? '—';
+          row.presType = p.type?.name ?? '—';
+          row.presVenue = p.venue
+            ? (p.venue.venueName || p.venue.address || '—')
+            : '—';
+        }
+      }
+      // Сортируем по дате и времени
+      rows.sort((a, b) => {
+        const ka = `${a.presDateSort ?? ''}T${a.presTime ?? '00:00'}`;
+        const kb = `${b.presDateSort ?? ''}T${b.presTime ?? '00:00'}`;
+        return ka.localeCompare(kb);
+      });
+    } else {
+      // Сортируем по ключу (хронологически)
+      rows.sort((a, b) => a.key.localeCompare(b.key));
+    }
     return rows;
   }
 
