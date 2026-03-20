@@ -359,7 +359,7 @@ export class GuestListsService {
       leftReason: string;
       notes: string;
       presentationId: string;
-      presentationNumber: number;
+      presentationNumber: number | null;
       time: string;
     }[] = [];
     const failedRows: FailedRow[] = [];
