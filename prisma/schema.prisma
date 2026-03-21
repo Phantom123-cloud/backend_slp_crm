@@ -122,6 +122,11 @@ model User {
   guestListsCreated      GuestList[]      @relation("GuestListCreatedBy")
   guestImportLogsCreated GuestImportLog[] @relation("GuestImportLogCreatedBy")
 
+  // Contract relations
+  contractsSpeaker    Contract[] @relation("ContractSpeaker")
+  contractsSignedBy   Contract[] @relation("ContractSignedBy")
+  contractsCreated    Contract[] @relation("ContractCreatedBy")
+
   @@map("users")
 }
 
@@ -235,6 +240,26 @@ enum TripRole {
   TRADER
 }
 
+enum PaymentType {
+  CASH
+  CREDIT
+  COMPANY
+  MIXED
+  TERMINAL
+  RESERVATION
+}
+
+enum SaleType {
+  RAFFLE
+  HOURLY
+}
+
+enum ContractStatus {
+  UNVERIFIED
+  VERIFIED
+  CANCELLED
+}
+
 model Trip {
   id              String     @id @default(uuid())
   name            String     // "AA250226" — авто: teamName + format(startDate)
@@ -260,6 +285,7 @@ model Trip {
   importLogs      GuestImportLog[]
   tripBanks       TripBank[]
   tripCompanies   TripCompany[]
+  contracts       Contract[]
 
   @@map("trips")
 }
@@ -306,6 +332,7 @@ model Presentation {
   crew            PresentationCrew[]
   summaryRows     PresentationSummary[]
   guestRecords    GuestRecord[]
+  contracts       Contract[]
 
   @@map("presentations")
 }
@@ -374,7 +401,8 @@ model Bank {
   description String?
   createdAt   DateTime @default(now())
 
-  tripBanks   TripBank[]
+  tripBanks     TripBank[]
+  contractBanks ContractBank[]
 
   @@map("banks")
 }
@@ -397,6 +425,7 @@ model Company {
   createdAt   DateTime @default(now())
 
   tripCompanies TripCompany[]
+  contracts     Contract[]
 
   @@map("companies")
 }
@@ -767,6 +796,93 @@ model GuestImportLog {
   createdBy       User       @relation("GuestImportLogCreatedBy", fields: [createdById], references: [id])
 
   @@map("guest_import_logs")
+}
+
+// ==================== CONTRACTS ====================
+
+model Contract {
+  id             String         @id @default(uuid())
+  contractNumber String         @unique // "210326/1П-001"
+
+  clientName     String
+  contractDate   DateTime
+
+  companyId      String?
+  company        Company?       @relation(fields: [companyId], references: [id])
+
+  paymentType    PaymentType
+  saleType       SaleType?
+
+  presentationId String
+  presentation   Presentation   @relation(fields: [presentationId], references: [id])
+
+  tripId         String
+  trip           Trip           @relation(fields: [tripId], references: [id])
+
+  speakerId      String?
+  speaker        User?          @relation("ContractSpeaker", fields: [speakerId], references: [id])
+
+  signedById     String
+  signedBy       User           @relation("ContractSignedBy", fields: [signedById], references: [id])
+
+  createdById    String
+  createdBy      User           @relation("ContractCreatedBy", fields: [createdById], references: [id])
+
+  totalAmount    Decimal        @default(0) @db.Decimal(12, 2)
+  advanceCash    Decimal?       @db.Decimal(12, 2)
+  advanceTerminal Decimal?      @db.Decimal(12, 2)
+  advanceBank    Decimal?       @db.Decimal(12, 2)
+
+  installmentMonths  Int?
+  firstPaymentDate   DateTime?
+
+  registrationAddress String?
+  actualAddress       String?
+
+  status         ContractStatus @default(UNVERIFIED)
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  banks            ContractBank[]
+  phones           ContractPhone[]
+  paymentSchedule  ContractPaymentSchedule[]
+
+  @@map("contracts")
+}
+
+model ContractBank {
+  id         String   @id @default(uuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  bankId     String
+  bank       Bank     @relation(fields: [bankId], references: [id])
+
+  @@unique([contractId, bankId])
+  @@map("contract_banks")
+}
+
+model ContractPhone {
+  id          String   @id @default(uuid())
+  contractId  String
+  contract    Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  countryCode String   // "+7", "+998"
+  number      String   // номер без кода страны
+  order       Int      @default(0)
+
+  @@map("contract_phones")
+}
+
+model ContractPaymentSchedule {
+  id         String   @id @default(uuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  date       DateTime
+  amount     Decimal  @db.Decimal(12, 2)
+  isPaid     Boolean  @default(false)
+  order      Int      @default(0)
+
+  @@map("contract_payment_schedules")
 }
 
 // ==================== AUDIT LOG ====================

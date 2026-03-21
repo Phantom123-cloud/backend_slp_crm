@@ -84,6 +84,13 @@ async function main() {
     // Trips - Banks
     { name: 'Банки выезда', slug: 'trips.banks', group: 'trips', description: 'Управление списком банков, разрешённых для работы в выезде' },
     { name: 'Компании выезда', slug: 'trips.companies', group: 'trips', description: 'Управление списком компаний, разрешённых для работы в выезде' },
+    // Contracts
+    { name: 'Просмотр всех договоров', slug: 'contracts.view-all', group: 'contracts', description: 'Просмотр всех договоров в системе' },
+    { name: 'Просмотр своих договоров', slug: 'contracts.view-person', group: 'contracts', description: 'Просмотр договоров, где пользователь является подписантом' },
+    { name: 'Создание договоров', slug: 'contracts.create', group: 'contracts', description: 'Создание новых договоров' },
+    { name: 'Редактирование договоров', slug: 'contracts.edit', group: 'contracts', description: 'Редактирование договоров' },
+    { name: 'Удаление договоров', slug: 'contracts.delete', group: 'contracts', description: 'Удаление договоров' },
+    { name: 'Верификация договоров', slug: 'contracts.verify', group: 'contracts', description: 'Смена статуса договора (верифицирован/не верифицирован/отменён)' },
   ];
 
   const createdPerms: Record<string, string> = {};
