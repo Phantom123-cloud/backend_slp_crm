@@ -83,3 +83,29 @@ export class UpdateVenueDto {
   @IsOptional()
   venueName?: string;
 }
+
+// === Bank DTOs ===
+
+export class CreateBankDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
+
+export class UpdateBankDto {
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  description?: string;
+}

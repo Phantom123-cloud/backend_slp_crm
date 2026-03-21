@@ -21,6 +21,8 @@ import {
   UpdateVenueDto,
   CreateExpenseTypeDto,
   UpdateExpenseTypeDto,
+  CreateBankDto,
+  UpdateBankDto,
 } from './dto/directories.dto';
 
 @ApiTags('Directories')
@@ -139,5 +141,38 @@ export class DirectoriesController {
   @ApiOperation({ summary: 'Удалить место проведения' })
   deleteVenue(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.directoriesService.deleteVenue(id, userId);
+  }
+
+  // === Banks ===
+
+  @Get('banks')
+  @ApiOperation({ summary: 'Список банков' })
+  findAllBanks() {
+    return this.directoriesService.findAllBanks();
+  }
+
+  @Post('banks')
+  @RequireAnyPermission('directories.create')
+  @ApiOperation({ summary: 'Создать банк' })
+  createBank(@Body() dto: CreateBankDto, @CurrentUser('id') userId: string) {
+    return this.directoriesService.createBank(dto, userId);
+  }
+
+  @Patch('banks/:id')
+  @RequireAnyPermission('directories.edit')
+  @ApiOperation({ summary: 'Обновить банк' })
+  updateBank(
+    @Param('id') id: string,
+    @Body() dto: UpdateBankDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.directoriesService.updateBank(id, dto, userId);
+  }
+
+  @Delete('banks/:id')
+  @RequireAnyPermission('directories.delete')
+  @ApiOperation({ summary: 'Удалить банк' })
+  deleteBank(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.directoriesService.deleteBank(id, userId);
   }
 }

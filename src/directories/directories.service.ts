@@ -12,6 +12,8 @@ import {
   UpdateVenueDto,
   CreateExpenseTypeDto,
   UpdateExpenseTypeDto,
+  CreateBankDto,
+  UpdateBankDto,
 } from './dto/directories.dto';
 
 @Injectable()
@@ -234,6 +236,69 @@ export class DirectoriesService {
       userId,
       action: 'venue.deleted',
       entity: 'venue',
+      entityId: id,
+    });
+  }
+
+  // ==================== Banks ====================
+
+  async findAllBanks() {
+    return this.prisma.bank.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  async createBank(dto: CreateBankDto, userId: string) {
+    const exists = await this.prisma.bank.findUnique({ where: { name: dto.name } });
+    if (exists) throw new ConflictException('errors.bankExists');
+
+    const bank = await this.prisma.bank.create({ data: dto });
+
+    await this.auditService.log({
+      userId,
+      action: 'bank.created',
+      entity: 'bank',
+      entityId: bank.id,
+      details: dto,
+    });
+
+    return bank;
+  }
+
+  async updateBank(id: string, dto: UpdateBankDto, userId: string) {
+    const bank = await this.prisma.bank.findUnique({ where: { id } });
+    if (!bank) throw new NotFoundException('errors.bankNotFound');
+
+    if (dto.name && dto.name !== bank.name) {
+      const exists = await this.prisma.bank.findUnique({ where: { name: dto.name } });
+      if (exists) throw new ConflictException('errors.bankExists');
+    }
+
+    const updated = await this.prisma.bank.update({ where: { id }, data: dto });
+
+    await this.auditService.log({
+      userId,
+      action: 'bank.updated',
+      entity: 'bank',
+      entityId: id,
+      details: dto,
+    });
+
+    return updated;
+  }
+
+  async deleteBank(id: string, userId: string) {
+    const bank = await this.prisma.bank.findUnique({ where: { id } });
+    if (!bank) throw new NotFoundException('errors.bankNotFound');
+
+    // Проверяем использование в выездах
+    const usageCount = await this.prisma.tripBank.count({ where: { bankId: id } });
+    if (usageCount > 0) throw new ConflictException('errors.bankInUse');
+
+    await this.prisma.bank.delete({ where: { id } });
+
+    await this.auditService.log({
+      userId,
+      action: 'bank.deleted',
+      entity: 'bank',
       entityId: id,
     });
   }

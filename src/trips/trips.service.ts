@@ -648,4 +648,37 @@ export class TripsService {
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });
   }
+
+  // ==================== Trip Banks ====================
+
+  async getTripBanks(tripId: string) {
+    const tripBanks = await this.prisma.tripBank.findMany({
+      where: { tripId },
+      include: {
+        bank: true,
+      },
+      orderBy: { bank: { name: 'asc' } },
+    });
+    return tripBanks.map((tb) => tb.bank);
+  }
+
+  async setTripBanks(tripId: string, bankIds: string[], userId: string) {
+    // Удаляем все старые записи и ставим новые (атомарно)
+    await this.prisma.$transaction([
+      this.prisma.tripBank.deleteMany({ where: { tripId } }),
+      ...bankIds.map((bankId) =>
+        this.prisma.tripBank.create({ data: { tripId, bankId } }),
+      ),
+    ]);
+
+    await this.auditService.log({
+      userId,
+      action: 'trip.banksUpdated',
+      entity: 'trip',
+      entityId: tripId,
+      details: { bankIds },
+    });
+
+    return this.getTripBanks(tripId);
+  }
 }

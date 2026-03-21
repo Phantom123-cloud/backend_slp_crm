@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Put,
   Delete,
   Body,
   Param,
@@ -19,7 +20,7 @@ import {
 import { TripsService } from './trips.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
-import { RequirePermissions } from '../common/decorators/permissions.decorator';
+import { RequirePermissions, RequireAnyPermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   CreateTripDto,
@@ -145,5 +146,24 @@ export class TripsController {
     @CurrentUser('id') userId: string,
   ) {
     return this.tripsService.updateCoordinator(id, dto, userId);
+  }
+
+  // === Trip Banks ===
+
+  @Get(':id/banks')
+  @ApiOperation({ summary: 'Банки выезда' })
+  getTripBanks(@Param('id') id: string) {
+    return this.tripsService.getTripBanks(id);
+  }
+
+  @Put(':id/banks')
+  @RequireAnyPermission('trips.banks')
+  @ApiOperation({ summary: 'Установить банки выезда' })
+  setTripBanks(
+    @Param('id') id: string,
+    @Body() body: { bankIds: string[] },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.tripsService.setTripBanks(id, body.bankIds, userId);
   }
 }

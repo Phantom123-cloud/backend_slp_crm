@@ -81,6 +81,8 @@ async function main() {
     { name: 'Удаление из списков гостей', slug: 'guest_lists.delete', group: 'guest_lists', description: 'Удаление записей гостей вручную и через файл с телефонами' },
     // Statistics
     { name: 'Просмотр статистики презентаций', slug: 'statistics.presentations', group: 'statistics', description: 'Доступ к разделу статистики презентаций: сводные данные по гостям, итогам и результатам по датам, ведущим, координаторам и индивидуально' },
+    // Trips - Banks
+    { name: 'Банки выезда', slug: 'trips.banks', group: 'trips', description: 'Управление списком банков, разрешённых для работы в выезде' },
   ];
 
   const createdPerms: Record<string, string> = {};
