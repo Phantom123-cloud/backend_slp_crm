@@ -109,3 +109,29 @@ export class UpdateBankDto {
   @IsOptional()
   description?: string;
 }
+
+// === Company DTOs ===
+
+export class CreateCompanyDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
+
+export class UpdateCompanyDto {
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  description?: string;
+}

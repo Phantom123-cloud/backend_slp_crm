@@ -83,6 +83,7 @@ async function main() {
     { name: 'Просмотр статистики презентаций', slug: 'statistics.presentations', group: 'statistics', description: 'Доступ к разделу статистики презентаций: сводные данные по гостям, итогам и результатам по датам, ведущим, координаторам и индивидуально' },
     // Trips - Banks
     { name: 'Банки выезда', slug: 'trips.banks', group: 'trips', description: 'Управление списком банков, разрешённых для работы в выезде' },
+    { name: 'Компании выезда', slug: 'trips.companies', group: 'trips', description: 'Управление списком компаний, разрешённых для работы в выезде' },
   ];
 
   const createdPerms: Record<string, string> = {};

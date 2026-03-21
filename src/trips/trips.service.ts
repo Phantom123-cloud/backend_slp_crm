@@ -681,4 +681,34 @@ export class TripsService {
 
     return this.getTripBanks(tripId);
   }
+
+  // ==================== Trip Companies ====================
+
+  async getTripCompanies(tripId: string) {
+    const tripCompanies = await this.prisma.tripCompany.findMany({
+      where: { tripId },
+      include: { company: true },
+      orderBy: { company: { name: 'asc' } },
+    });
+    return tripCompanies.map((tc) => tc.company);
+  }
+
+  async setTripCompanies(tripId: string, companyIds: string[], userId: string) {
+    await this.prisma.$transaction([
+      this.prisma.tripCompany.deleteMany({ where: { tripId } }),
+      ...companyIds.map((companyId) =>
+        this.prisma.tripCompany.create({ data: { tripId, companyId } }),
+      ),
+    ]);
+
+    await this.auditService.log({
+      userId,
+      action: 'trip.companiesUpdated',
+      entity: 'trip',
+      entityId: tripId,
+      details: { companyIds },
+    });
+
+    return this.getTripCompanies(tripId);
+  }
 }

@@ -14,6 +14,8 @@ import {
   UpdateExpenseTypeDto,
   CreateBankDto,
   UpdateBankDto,
+  CreateCompanyDto,
+  UpdateCompanyDto,
 } from './dto/directories.dto';
 
 @Injectable()
@@ -299,6 +301,68 @@ export class DirectoriesService {
       userId,
       action: 'bank.deleted',
       entity: 'bank',
+      entityId: id,
+    });
+  }
+
+  // ==================== Companies ====================
+
+  async findAllCompanies() {
+    return this.prisma.company.findMany({ orderBy: { name: 'asc' } });
+  }
+
+  async createCompany(dto: CreateCompanyDto, userId: string) {
+    const exists = await this.prisma.company.findUnique({ where: { name: dto.name } });
+    if (exists) throw new ConflictException('errors.companyExists');
+
+    const company = await this.prisma.company.create({ data: dto });
+
+    await this.auditService.log({
+      userId,
+      action: 'company.created',
+      entity: 'company',
+      entityId: company.id,
+      details: dto,
+    });
+
+    return company;
+  }
+
+  async updateCompany(id: string, dto: UpdateCompanyDto, userId: string) {
+    const company = await this.prisma.company.findUnique({ where: { id } });
+    if (!company) throw new NotFoundException('errors.companyNotFound');
+
+    if (dto.name && dto.name !== company.name) {
+      const exists = await this.prisma.company.findUnique({ where: { name: dto.name } });
+      if (exists) throw new ConflictException('errors.companyExists');
+    }
+
+    const updated = await this.prisma.company.update({ where: { id }, data: dto });
+
+    await this.auditService.log({
+      userId,
+      action: 'company.updated',
+      entity: 'company',
+      entityId: id,
+      details: dto,
+    });
+
+    return updated;
+  }
+
+  async deleteCompany(id: string, userId: string) {
+    const company = await this.prisma.company.findUnique({ where: { id } });
+    if (!company) throw new NotFoundException('errors.companyNotFound');
+
+    const usageCount = await this.prisma.tripCompany.count({ where: { companyId: id } });
+    if (usageCount > 0) throw new ConflictException('errors.companyInUse');
+
+    await this.prisma.company.delete({ where: { id } });
+
+    await this.auditService.log({
+      userId,
+      action: 'company.deleted',
+      entity: 'company',
       entityId: id,
     });
   }

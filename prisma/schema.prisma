@@ -259,6 +259,7 @@ model Trip {
   guestLists      GuestList[]
   importLogs      GuestImportLog[]
   tripBanks       TripBank[]
+  tripCompanies   TripCompany[]
 
   @@map("trips")
 }
@@ -387,6 +388,28 @@ model TripBank {
 
   @@unique([tripId, bankId])
   @@map("trip_banks")
+}
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  tripCompanies TripCompany[]
+
+  @@map("companies")
+}
+
+model TripCompany {
+  id        String  @id @default(uuid())
+  tripId    String
+  trip      Trip    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, companyId])
+  @@map("trip_companies")
 }
 
 // ==================== WAREHOUSE & WALLET ====================

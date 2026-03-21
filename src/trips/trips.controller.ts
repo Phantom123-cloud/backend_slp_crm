@@ -166,4 +166,23 @@ export class TripsController {
   ) {
     return this.tripsService.setTripBanks(id, body.bankIds, userId);
   }
+
+  // === Trip Companies ===
+
+  @Get(':id/companies')
+  @ApiOperation({ summary: 'Компании выезда' })
+  getTripCompanies(@Param('id') id: string) {
+    return this.tripsService.getTripCompanies(id);
+  }
+
+  @Put(':id/companies')
+  @RequireAnyPermission('trips.companies')
+  @ApiOperation({ summary: 'Установить компании выезда' })
+  setTripCompanies(
+    @Param('id') id: string,
+    @Body() body: { companyIds: string[] },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.tripsService.setTripCompanies(id, body.companyIds, userId);
+  }
 }

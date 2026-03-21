@@ -23,6 +23,8 @@ import {
   UpdateExpenseTypeDto,
   CreateBankDto,
   UpdateBankDto,
+  CreateCompanyDto,
+  UpdateCompanyDto,
 } from './dto/directories.dto';
 
 @ApiTags('Directories')
@@ -174,5 +176,38 @@ export class DirectoriesController {
   @ApiOperation({ summary: 'Удалить банк' })
   deleteBank(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.directoriesService.deleteBank(id, userId);
+  }
+
+  // === Companies ===
+
+  @Get('companies')
+  @ApiOperation({ summary: 'Список компаний' })
+  findAllCompanies() {
+    return this.directoriesService.findAllCompanies();
+  }
+
+  @Post('companies')
+  @RequireAnyPermission('directories.create')
+  @ApiOperation({ summary: 'Создать компанию' })
+  createCompany(@Body() dto: CreateCompanyDto, @CurrentUser('id') userId: string) {
+    return this.directoriesService.createCompany(dto, userId);
+  }
+
+  @Patch('companies/:id')
+  @RequireAnyPermission('directories.edit')
+  @ApiOperation({ summary: 'Обновить компанию' })
+  updateCompany(
+    @Param('id') id: string,
+    @Body() dto: UpdateCompanyDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.directoriesService.updateCompany(id, dto, userId);
+  }
+
+  @Delete('companies/:id')
+  @RequireAnyPermission('directories.delete')
+  @ApiOperation({ summary: 'Удалить компанию' })
+  deleteCompany(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.directoriesService.deleteCompany(id, userId);
   }
 }
