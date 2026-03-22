@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber, IsDateString, IsArray, ValidateNested, IsBoolean, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum, IsNumber, IsDateString, IsArray, ValidateNested, IsBoolean, Min, IsObject, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export enum PaymentTypeDto {
@@ -113,6 +113,10 @@ export class CreateContractDto {
   @IsOptional()
   bankIds?: string[];
 
+  @IsObject()
+  @IsOptional()
+  bankAdvances?: Record<string, number>;
+
   @IsArray()
   @IsOptional()
   @ValidateNested({ each: true })
@@ -124,6 +128,36 @@ export class CreateContractDto {
   @ValidateNested({ each: true })
   @Type(() => PaymentScheduleItemDto)
   paymentSchedule?: PaymentScheduleItemDto[];
+}
+
+// DTO для оформления возврата (обнуление авансов)
+export class RefundContractDto {
+  @IsIn(['REFUND', 'PARTIAL_REFUND'])
+  paymentStatus: 'REFUND' | 'PARTIAL_REFUND';
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  advanceCash?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  advanceTerminal?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  advanceBank?: number;
+
+  @IsObject()
+  @IsOptional()
+  bankAdvances?: Record<string, number>;
+
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  amountAfterRefund?: number;
 }
 
 export class UpdateContractDto {
@@ -191,6 +225,10 @@ export class UpdateContractDto {
   @IsArray()
   @IsOptional()
   bankIds?: string[];
+
+  @IsObject()
+  @IsOptional()
+  bankAdvances?: Record<string, number>;
 
   @IsArray()
   @IsOptional()

@@ -15,7 +15,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequireAnyPermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CreateContractDto, UpdateContractDto } from './dto/contracts.dto';
+import { CreateContractDto, UpdateContractDto, RefundContractDto } from './dto/contracts.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('Contracts')
@@ -76,6 +76,28 @@ export class ContractsController {
     @CurrentUser('id') userId: string,
   ) {
     return this.contractsService.update(id, dto, userId);
+  }
+
+  @Patch(':id/refund')
+  @RequireAnyPermission('contracts.edit')
+  @ApiOperation({ summary: 'Оформить возврат по договору' })
+  refund(
+    @Param('id') id: string,
+    @Body() dto: RefundContractDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.contractsService.refund(id, dto, userId);
+  }
+
+  @Patch(':id/financials')
+  @RequireAnyPermission('contracts.edit')
+  @ApiOperation({ summary: 'Редактировать финансы договора (→ частичный возврат)' })
+  updateFinancials(
+    @Param('id') id: string,
+    @Body() dto: UpdateContractDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.contractsService.updateFinancials(id, dto, userId);
   }
 
   @Patch(':id/status')

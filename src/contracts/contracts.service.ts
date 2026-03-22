@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { CreateContractDto, UpdateContractDto } from './dto/contracts.dto';
+import { CreateContractDto, UpdateContractDto, RefundContractDto } from './dto/contracts.dto';
 
 @Injectable()
 export class ContractsService {
@@ -114,6 +114,7 @@ export class ContractsService {
 
     const {
       bankIds,
+      bankAdvances,
       phones,
       paymentSchedule,
       ...rest
@@ -131,7 +132,7 @@ export class ContractsService {
         firstPaymentDate: dto.firstPaymentDate ? new Date(dto.firstPaymentDate) : null,
         createdById: userId,
         banks: bankIds?.length
-          ? { create: bankIds.map((bankId) => ({ bankId })) }
+          ? { create: bankIds.map((bankId) => ({ bankId, advance: bankAdvances?.[bankId] ?? null })) }
           : undefined,
         phones: phones?.length
           ? {
@@ -174,6 +175,7 @@ export class ContractsService {
 
     const {
       bankIds,
+      bankAdvances,
       phones,
       paymentSchedule,
       contractDate,
@@ -192,7 +194,7 @@ export class ContractsService {
         await tx.contractBank.deleteMany({ where: { contractId: id } });
         if (bankIds.length > 0) {
           await tx.contractBank.createMany({
-            data: bankIds.map((bankId) => ({ contractId: id, bankId })),
+            data: bankIds.map((bankId) => ({ contractId: id, bankId, advance: bankAdvances?.[bankId] ?? null })),
           });
         }
       }
@@ -248,6 +250,99 @@ export class ContractsService {
     await this.auditService.log({
       userId,
       action: 'contract.updated',
+      entity: 'contract',
+      entityId: id,
+      details: rest,
+    });
+
+    return this.findOne(id);
+  }
+
+  /** Оформить возврат или частичный возврат */
+  async refund(id: string, dto: RefundContractDto, userId: string) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id },
+      include: { banks: true },
+    });
+    if (!contract) throw new NotFoundException('errors.contractNotFound');
+
+    const { paymentStatus, advanceCash, advanceTerminal, advanceBank, bankAdvances, amountAfterRefund } = dto;
+
+    await this.prisma.$transaction(async (tx) => {
+      // Обновляем авансы по банкам если переданы
+      if (bankAdvances !== undefined) {
+        for (const [bankId, advance] of Object.entries(bankAdvances)) {
+          await tx.contractBank.updateMany({
+            where: { contractId: id, bankId },
+            data: { advance },
+          });
+        }
+      }
+
+      await tx.contract.update({
+        where: { id },
+        data: {
+          paymentStatus: paymentStatus as any,
+          advanceCash: advanceCash ?? null,
+          advanceTerminal: advanceTerminal ?? null,
+          advanceBank: advanceBank ?? null,
+          amountAfterRefund: amountAfterRefund ?? null,
+        },
+      });
+    });
+
+    await this.auditService.log({
+      userId,
+      action: 'contract.refund',
+      entity: 'contract',
+      entityId: id,
+      details: { paymentStatus },
+    });
+
+    return this.findOne(id);
+  }
+
+  /** Обновить финансовые данные (→ PARTIAL_REFUND) */
+  async updateFinancials(id: string, dto: UpdateContractDto, userId: string) {
+    const existing = await this.prisma.contract.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('errors.contractNotFound');
+
+    const { bankIds, bankAdvances, phones, paymentSchedule, ...rest } = dto;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (bankIds !== undefined) {
+        await tx.contractBank.deleteMany({ where: { contractId: id } });
+        if (bankIds.length > 0) {
+          await tx.contractBank.createMany({
+            data: bankIds.map((bankId) => ({
+              contractId: id,
+              bankId,
+              advance: bankAdvances?.[bankId] ?? null,
+            })),
+          });
+        }
+      }
+
+      await tx.contract.update({
+        where: { id },
+        data: {
+          ...rest,
+          paymentStatus: 'PARTIAL_REFUND',
+          ...(dto.totalAmount !== undefined ? { totalAmount: dto.totalAmount } : {}),
+          ...(dto.advanceCash !== undefined ? { advanceCash: dto.advanceCash ?? null } : {}),
+          ...(dto.advanceTerminal !== undefined ? { advanceTerminal: dto.advanceTerminal ?? null } : {}),
+          ...(dto.advanceBank !== undefined ? { advanceBank: dto.advanceBank ?? null } : {}),
+          ...(dto.firstPaymentDate !== undefined
+            ? { firstPaymentDate: dto.firstPaymentDate ? new Date(dto.firstPaymentDate) : null }
+            : {}),
+          amountAfterRefund: dto.totalAmount ?? existing.totalAmount,
+        },
+      });
+    });
+
+    await this.auditService.log({
+      userId,
+      action: 'contract.financialsUpdated',
       entity: 'contract',
       entityId: id,
       details: rest,

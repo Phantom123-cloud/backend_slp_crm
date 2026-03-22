@@ -260,6 +260,13 @@ enum ContractStatus {
   CANCELLED
 }
 
+enum PaymentStatus {
+  OPEN            // Незакрытый (рассрочка не выплачена)
+  CLOSED          // Закрытый (авансы = сумме или рассрочка выплачена)
+  REFUND          // Возврат (авансы обнулены)
+  PARTIAL_REFUND  // Частичный возврат
+}
+
 model Trip {
   id              String     @id @default(uuid())
   name            String     // "AA250226" — авто: teamName + format(startDate)
@@ -840,6 +847,10 @@ model Contract {
   actualAddress       String?
 
   status         ContractStatus @default(UNVERIFIED)
+  paymentStatus  PaymentStatus  @default(OPEN)
+
+  // Суммы до/после возврата
+  amountAfterRefund Decimal?    @db.Decimal(12, 2)
 
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
@@ -857,6 +868,7 @@ model ContractBank {
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
   bankId     String
   bank       Bank     @relation(fields: [bankId], references: [id])
+  advance    Decimal? @db.Decimal(14, 2)
 
   @@unique([contractId, bankId])
   @@map("contract_banks")
