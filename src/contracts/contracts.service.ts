@@ -307,7 +307,8 @@ export class ContractsService {
     const existing = await this.prisma.contract.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('errors.contractNotFound');
 
-    const { bankIds, bankAdvances, phones, paymentSchedule, ...rest } = dto;
+    // totalAmount вырезаем из rest — в updateFinancials оно идёт в amountAfterRefund, сам totalAmount не меняем
+    const { bankIds, bankAdvances, phones, paymentSchedule, totalAmount, advanceCash, advanceTerminal, advanceBank, firstPaymentDate, installmentMonths, ...rest } = dto;
 
     await this.prisma.$transaction(async (tx) => {
       // Обновляем банки если переданы
@@ -345,18 +346,19 @@ export class ContractsService {
       await tx.contract.update({
         where: { id },
         data: {
-          ...rest,
+          ...rest, // paymentType, saleType и др. — без totalAmount (деструктурирован выше)
           paymentStatus: 'PARTIAL_REFUND',
-          ...(dto.totalAmount !== undefined ? { totalAmount: dto.totalAmount } : {}),
-          ...(dto.advanceCash !== undefined ? { advanceCash: dto.advanceCash ?? null } : {}),
-          ...(dto.advanceTerminal !== undefined ? { advanceTerminal: dto.advanceTerminal ?? null } : {}),
-          ...(dto.advanceBank !== undefined ? { advanceBank: dto.advanceBank ?? null } : {}),
+          // totalAmount НЕ обновляем — исходная сумма договора (до возврата)
+          // dto.totalAmount → amountAfterRefund (сумма после возврата)
+          amountAfterRefund: totalAmount ?? existing.totalAmount,
+          advanceCash: advanceCash ?? null,
+          advanceTerminal: advanceTerminal ?? null,
+          advanceBank: advanceBank ?? null,
           // Обнуляем рассрочку если тип оплаты не предполагает её
-          installmentMonths: hasInstallment ? dto.installmentMonths : null,
-          firstPaymentDate: hasInstallment && dto.firstPaymentDate
-            ? new Date(dto.firstPaymentDate)
+          installmentMonths: hasInstallment ? installmentMonths : null,
+          firstPaymentDate: hasInstallment && firstPaymentDate
+            ? new Date(firstPaymentDate)
             : null,
-          amountAfterRefund: dto.totalAmount ?? existing.totalAmount,
         },
       });
     });
