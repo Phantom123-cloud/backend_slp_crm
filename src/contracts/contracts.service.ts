@@ -310,6 +310,7 @@ export class ContractsService {
     const { bankIds, bankAdvances, phones, paymentSchedule, ...rest } = dto;
 
     await this.prisma.$transaction(async (tx) => {
+      // Обновляем банки если переданы
       if (bankIds !== undefined) {
         await tx.contractBank.deleteMany({ where: { contractId: id } });
         if (bankIds.length > 0) {
@@ -323,6 +324,24 @@ export class ContractsService {
         }
       }
 
+      // Всегда пересоздаём график платежей (пустой массив = удалить)
+      await tx.contractPaymentSchedule.deleteMany({ where: { contractId: id } });
+      if (paymentSchedule && paymentSchedule.length > 0) {
+        await tx.contractPaymentSchedule.createMany({
+          data: paymentSchedule.map((s, i) => ({
+            contractId: id,
+            date: new Date(s.date),
+            amount: s.amount,
+            isPaid: s.isPaid ?? false,
+            order: i,
+          })),
+        });
+      }
+
+      const hasInstallment =
+        (dto.paymentType === 'COMPANY' || dto.paymentType === 'MIXED') &&
+        dto.installmentMonths;
+
       await tx.contract.update({
         where: { id },
         data: {
@@ -332,9 +351,11 @@ export class ContractsService {
           ...(dto.advanceCash !== undefined ? { advanceCash: dto.advanceCash ?? null } : {}),
           ...(dto.advanceTerminal !== undefined ? { advanceTerminal: dto.advanceTerminal ?? null } : {}),
           ...(dto.advanceBank !== undefined ? { advanceBank: dto.advanceBank ?? null } : {}),
-          ...(dto.firstPaymentDate !== undefined
-            ? { firstPaymentDate: dto.firstPaymentDate ? new Date(dto.firstPaymentDate) : null }
-            : {}),
+          // Обнуляем рассрочку если тип оплаты не предполагает её
+          installmentMonths: hasInstallment ? dto.installmentMonths : null,
+          firstPaymentDate: hasInstallment && dto.firstPaymentDate
+            ? new Date(dto.firstPaymentDate)
+            : null,
           amountAfterRefund: dto.totalAmount ?? existing.totalAmount,
         },
       });
