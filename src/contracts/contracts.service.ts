@@ -339,9 +339,11 @@ export class ContractsService {
         });
       }
 
+      // Рассрочка считается активной только если есть месяцы И непустой график
       const hasInstallment =
         (dto.paymentType === 'COMPANY' || dto.paymentType === 'MIXED') &&
-        dto.installmentMonths;
+        dto.installmentMonths &&
+        paymentSchedule && paymentSchedule.length > 0;
 
       // Если рассрочка убрана — amountAfterRefund = сумма авансов (рассрочка обнуляется)
       // Если рассрочка есть — amountAfterRefund = totalAmount из формы (введённое пользователем)
