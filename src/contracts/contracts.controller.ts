@@ -111,6 +111,16 @@ export class ContractsController {
     return this.contractsService.updateStatus(id, body.status, userId);
   }
 
+  @Patch('schedule/:scheduleItemId/unpay')
+  @RequireAnyPermission('contracts.edit')
+  @ApiOperation({ summary: 'Отменить подтверждение платежа по графику' })
+  unpayScheduleItem(
+    @Param('scheduleItemId') scheduleItemId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.contractsService.unpayScheduleItem(scheduleItemId, userId);
+  }
+
   @Patch('schedule/:scheduleItemId/pay')
   @RequireAnyPermission('contracts.edit')
   @ApiOperation({ summary: 'Подтвердить платёж по графику рассрочки' })
