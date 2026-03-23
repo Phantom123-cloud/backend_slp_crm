@@ -345,10 +345,13 @@ export class ContractsService {
 
       // Если рассрочка убрана — amountAfterRefund = сумма авансов (рассрочка обнуляется)
       // Если рассрочка есть — amountAfterRefund = totalAmount из формы (введённое пользователем)
-      const newAdvanceCash = advanceCash ?? 0;
-      const newAdvanceTerminal = advanceTerminal ?? 0;
-      const newAdvanceBank = advanceBank ?? 0;
-      const totalAdvances = Number(newAdvanceCash) + Number(newAdvanceTerminal) + Number(newAdvanceBank);
+      const newAdvanceCash = Number(advanceCash ?? 0);
+      const newAdvanceTerminal = Number(advanceTerminal ?? 0);
+      // При MIXED/CREDIT банковские авансы приходят в bankAdvances (per-bank), advanceBank может быть 0
+      const bankAdvancesTotal = bankAdvances
+        ? Object.values(bankAdvances).reduce((sum, v) => sum + (Number(v) || 0), 0)
+        : Number(advanceBank ?? 0);
+      const totalAdvances = newAdvanceCash + newAdvanceTerminal + bankAdvancesTotal;
       const computedAmountAfterRefund = hasInstallment
         ? (totalAmount ?? existing.totalAmount)
         : totalAdvances;
