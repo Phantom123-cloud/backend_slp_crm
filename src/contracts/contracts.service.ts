@@ -367,7 +367,8 @@ export class ContractsService {
           amountAfterRefund: computedAmountAfterRefund,
           advanceCash: advanceCash ?? null,
           advanceTerminal: advanceTerminal ?? null,
-          advanceBank: advanceBank ?? null,
+          // advanceBank = сумма per-bank авансов, чтобы поле оставалось актуальным
+          advanceBank: bankAdvancesTotal > 0 ? bankAdvancesTotal : (advanceBank ?? null),
           // Обнуляем рассрочку если тип оплаты не предполагает её
           installmentMonths: hasInstallment ? installmentMonths : null,
           firstPaymentDate: hasInstallment && firstPaymentDate
