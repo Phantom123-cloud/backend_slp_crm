@@ -343,14 +343,23 @@ export class ContractsService {
         (dto.paymentType === 'COMPANY' || dto.paymentType === 'MIXED') &&
         dto.installmentMonths;
 
+      // Если рассрочка убрана — amountAfterRefund = сумма авансов (рассрочка обнуляется)
+      // Если рассрочка есть — amountAfterRefund = totalAmount из формы (введённое пользователем)
+      const newAdvanceCash = advanceCash ?? 0;
+      const newAdvanceTerminal = advanceTerminal ?? 0;
+      const newAdvanceBank = advanceBank ?? 0;
+      const totalAdvances = Number(newAdvanceCash) + Number(newAdvanceTerminal) + Number(newAdvanceBank);
+      const computedAmountAfterRefund = hasInstallment
+        ? (totalAmount ?? existing.totalAmount)
+        : totalAdvances;
+
       await tx.contract.update({
         where: { id },
         data: {
           ...rest, // paymentType, saleType и др. — без totalAmount (деструктурирован выше)
           paymentStatus: 'PARTIAL_REFUND',
           // totalAmount НЕ обновляем — исходная сумма договора (до возврата)
-          // dto.totalAmount → amountAfterRefund (сумма после возврата)
-          amountAfterRefund: totalAmount ?? existing.totalAmount,
+          amountAfterRefund: computedAmountAfterRefund,
           advanceCash: advanceCash ?? null,
           advanceTerminal: advanceTerminal ?? null,
           advanceBank: advanceBank ?? null,
