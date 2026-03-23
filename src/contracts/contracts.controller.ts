@@ -111,6 +111,16 @@ export class ContractsController {
     return this.contractsService.updateStatus(id, body.status, userId);
   }
 
+  @Patch('schedule/:scheduleItemId/pay')
+  @RequireAnyPermission('contracts.edit')
+  @ApiOperation({ summary: 'Подтвердить платёж по графику рассрочки' })
+  payScheduleItem(
+    @Param('scheduleItemId') scheduleItemId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.contractsService.payScheduleItem(scheduleItemId, userId);
+  }
+
   @Delete(':id')
   @RequireAnyPermission('contracts.delete')
   @ApiOperation({ summary: 'Удалить договор' })

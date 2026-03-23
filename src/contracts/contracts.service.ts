@@ -411,6 +411,29 @@ export class ContractsService {
     return updated;
   }
 
+  /** Подтвердить платёж по графику рассрочки */
+  async payScheduleItem(scheduleItemId: string, userId: string) {
+    const item = await this.prisma.contractPaymentSchedule.findUnique({
+      where: { id: scheduleItemId },
+    });
+    if (!item) throw new NotFoundException('errors.scheduleItemNotFound');
+
+    await this.prisma.contractPaymentSchedule.update({
+      where: { id: scheduleItemId },
+      data: { isPaid: true },
+    });
+
+    await this.auditService.log({
+      userId,
+      action: 'contract.scheduleItemPaid',
+      entity: 'contract',
+      entityId: item.contractId,
+      details: { scheduleItemId, date: item.date, amount: item.amount },
+    });
+
+    return this.findOne(item.contractId);
+  }
+
   /** Удалить договор */
   async delete(id: string, userId: string) {
     const contract = await this.prisma.contract.findUnique({ where: { id } });
