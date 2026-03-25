@@ -224,15 +224,12 @@ export class StatsService {
     // Формируем фильтр по сотруднику если задан
     const personFilter: any = {};
     if (filterBy && userId) {
-      if (filterBy === 'coordinator') {
-        personFilter.presentation = { coordinatorId: userId };
-      } else if (filterBy === 'crew') {
-        personFilter.presentation = { crew: { some: { userId } } };
+      if (filterBy === 'speaker') {
+        // Ведущий — поле speakerId в договоре
+        personFilter.speakerId = userId;
       } else if (filterBy === 'employee') {
-        // Сотрудник — ищем по координатору ИЛИ ведущему
-        personFilter.presentation = {
-          OR: [{ coordinatorId: userId }, { crew: { some: { userId } } }],
-        };
+        // Сотрудник (Оформил) — поле signedById в договоре
+        personFilter.signedById = userId;
       }
     }
 
@@ -245,19 +242,7 @@ export class StatsService {
       include: {
         banks: { include: { bank: true } },
         signedBy: { select: { id: true, firstName: true, lastName: true } },
-        presentation: {
-          select: {
-            coordinatorId: true,
-            coordinator: { select: { id: true, firstName: true, lastName: true } },
-            crew: {
-              select: {
-                userId: true,
-                role: true,
-                user: { select: { id: true, firstName: true, lastName: true } },
-              },
-            },
-          },
-        },
+        speaker: { select: { id: true, firstName: true, lastName: true } },
       },
     });
 
@@ -282,14 +267,11 @@ export class StatsService {
     let cashTotal = 0, cashRefund = 0, cashPartial = 0;
     let terminalTotal = 0, terminalRefund = 0, terminalPartial = 0;
 
-    // Группировка по менеджерам и типам сделок
-    const managerMap: Record<string, { name: string; count: number; turnover: number; realMoney: number }> = {};
-    const saleTypeMap: Record<string, { label: string; count: number; turnover: number }> = {};
-
-    // Группировка по координаторам и ведущим (crew)
+    // Группировка по менеджерам (Оформил), ведущим (speakerId) и типам сделок
     type PersonStat = { id: string; name: string; count: number; turnover: number; realMoney: number };
-    const coordMap: Record<string, PersonStat> = {};
-    const crewMap: Record<string, PersonStat> = {};
+    const managerMap: Record<string, PersonStat> = {};
+    const speakerMap: Record<string, PersonStat> = {};
+    const saleTypeMap: Record<string, { label: string; count: number; turnover: number }> = {};
 
     for (const c of contracts) {
       const amount = Number(c.totalAmount ?? 0);
@@ -407,25 +389,14 @@ export class StatsService {
         const contractRealMoney = cash + terminal + bankRealSum;
         managerMap[managerId].realMoney += contractRealMoney;
 
-        // Координатор презентации
-        if (c.presentation?.coordinator) {
-          const coord = c.presentation.coordinator;
-          const cid = coord.id;
-          const cname = `${coord.firstName ?? ''} ${coord.lastName ?? ''}`.trim() || 'Неизвестно';
-          if (!coordMap[cid]) coordMap[cid] = { id: cid, name: cname, count: 0, turnover: 0, realMoney: 0 };
-          coordMap[cid].count++;
-          coordMap[cid].turnover += amount;
-          coordMap[cid].realMoney += contractRealMoney;
-        }
-
-        // Ведущие (crew) презентации
-        for (const cm of c.presentation?.crew ?? []) {
-          const uid = cm.userId;
-          const uname = `${cm.user.firstName ?? ''} ${cm.user.lastName ?? ''}`.trim() || 'Неизвестно';
-          if (!crewMap[uid]) crewMap[uid] = { id: uid, name: uname, count: 0, turnover: 0, realMoney: 0 };
-          crewMap[uid].count++;
-          crewMap[uid].turnover += amount;
-          crewMap[uid].realMoney += contractRealMoney;
+        // Ведущий договора (поле speakerId)
+        if (c.speakerId && c.speaker) {
+          const sid = c.speakerId;
+          const sname = `${c.speaker.firstName ?? ''} ${c.speaker.lastName ?? ''}`.trim() || 'Неизвестно';
+          if (!speakerMap[sid]) speakerMap[sid] = { id: sid, name: sname, count: 0, turnover: 0, realMoney: 0 };
+          speakerMap[sid].count++;
+          speakerMap[sid].turnover += amount;
+          speakerMap[sid].realMoney += contractRealMoney;
         }
       }
     }
@@ -473,27 +444,10 @@ export class StatsService {
       .map(s => ({ ...s, turnover: Math.round(s.turnover) }))
       .sort((a, b) => b.turnover - a.turnover);
 
-    // Координаторы — сортировка по обороту
-    const byCoordinator = Object.values(coordMap)
-      .map(c => ({ ...c, turnover: Math.round(c.turnover), realMoney: Math.round(c.realMoney) }))
+    // Ведущие договоров (speakerId) — сортировка по обороту
+    const bySpeaker = Object.values(speakerMap)
+      .map(s => ({ ...s, turnover: Math.round(s.turnover), realMoney: Math.round(s.realMoney) }))
       .sort((a, b) => b.turnover - a.turnover);
-
-    // Ведущие (crew) — сортировка по обороту
-    const byHost = Object.values(crewMap)
-      .map(c => ({ ...c, turnover: Math.round(c.turnover), realMoney: Math.round(c.realMoney) }))
-      .sort((a, b) => b.turnover - a.turnover);
-
-    // Все сотрудники (union координаторов и ведущих, без дублей)
-    const allEmployeeMap: Record<string, PersonStat & { roles: string[] }> = {};
-    for (const c of byCoordinator) {
-      if (!allEmployeeMap[c.id]) allEmployeeMap[c.id] = { ...c, roles: [] };
-      if (!allEmployeeMap[c.id].roles.includes('Координатор')) allEmployeeMap[c.id].roles.push('Координатор');
-    }
-    for (const c of byHost) {
-      if (!allEmployeeMap[c.id]) allEmployeeMap[c.id] = { ...c, roles: [] };
-      if (!allEmployeeMap[c.id].roles.includes('Ведущий')) allEmployeeMap[c.id].roles.push('Ведущий');
-    }
-    const byEmployee = Object.values(allEmployeeMap).sort((a, b) => b.turnover - a.turnover);
 
     return {
       total,
@@ -512,10 +466,8 @@ export class StatsService {
       byDate,
       refundChart,
       byManager,
+      bySpeaker,
       bySaleType,
-      byCoordinator,
-      byHost,
-      byEmployee,
     };
   }
 
