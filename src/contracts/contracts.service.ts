@@ -50,6 +50,15 @@ export class ContractsService {
   }
 
   /** Генерация номера договора: DDMMYY/NП-SEQ */
+  /** Публичная обёртка — для превью номера из контроллера */
+  async previewContractNumber(
+    presentationId: string,
+    contractDate: Date,
+    signedById: string,
+  ): Promise<string> {
+    return this.generateContractNumber(presentationId, contractDate, signedById);
+  }
+
   private async generateContractNumber(
     presentationId: string,
     contractDate: Date,

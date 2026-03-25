@@ -55,6 +55,23 @@ export class ContractsController {
     return this.contractsService.findAll(userId, permissions, tripId);
   }
 
+  @Get('preview-number')
+  @RequireAnyPermission('contracts.create')
+  @ApiOperation({ summary: 'Предпросмотр номера договора' })
+  async previewNumber(
+    @Query('presentationId') presentationId: string,
+    @Query('signedById') signedById: string,
+    @Query('contractDate') contractDate: string,
+  ) {
+    const date = contractDate ? new Date(contractDate) : new Date();
+    const number = await this.contractsService.previewContractNumber(
+      presentationId,
+      date,
+      signedById,
+    );
+    return { number };
+  }
+
   @Get(':id')
   @RequireAnyPermission('contracts.view-all', 'contracts.view-person')
   @ApiOperation({ summary: 'Получить договор' })
