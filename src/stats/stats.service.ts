@@ -282,7 +282,7 @@ export class StatsService {
 
       // Тип сделки
       const st = c.saleType ?? 'OTHER';
-      const stLabel = st === 'RAFFLE' ? 'Розыгрыш' : st === 'HOURLY' ? 'Почасовой' : 'Без типа';
+      const stLabel = st === 'RAFFLE' ? 'Розыгрыш' : st === 'HOURLY' ? 'Часовка' : 'Без типа';
       if (!saleTypeMap[st]) saleTypeMap[st] = { label: stLabel, count: 0, turnover: 0 };
       saleTypeMap[st].count++;
       saleTypeMap[st].turnover += amount;
