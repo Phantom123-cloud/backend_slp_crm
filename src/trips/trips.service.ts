@@ -29,7 +29,8 @@ export class TripsService {
     const yy = String(startDate.getFullYear()).slice(-2);
     const mm = String(startDate.getMonth() + 1).padStart(2, '0');
     const dd = String(startDate.getDate()).padStart(2, '0');
-    return `${teamName}${yy}${mm}${dd}`;
+    // Формат: DDMMYY (день-месяц-год)
+    return `${teamName}${dd}${mm}${yy}`;
   }
 
   /** Вычисляет эффективный статус выезда на основе дат.
