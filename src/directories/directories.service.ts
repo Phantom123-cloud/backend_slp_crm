@@ -14,6 +14,8 @@ import {
   UpdateExpenseTypeDto,
   CreateBankDto,
   UpdateBankDto,
+  CreateBankConditionDto,
+  UpdateBankConditionDto,
   CreateCompanyDto,
   UpdateCompanyDto,
 } from './dto/directories.dto';
@@ -245,7 +247,15 @@ export class DirectoriesService {
   // ==================== Banks ====================
 
   async findAllBanks() {
-    return this.prisma.bank.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.bank.findMany({
+      orderBy: { name: 'asc' },
+      include: {
+        conditions: {
+          where: { isActive: true },
+          orderBy: { sortOrder: 'asc' as const },
+        },
+      },
+    });
   }
 
   async createBank(dto: CreateBankDto, userId: string) {
@@ -302,6 +312,65 @@ export class DirectoriesService {
       action: 'bank.deleted',
       entity: 'bank',
       entityId: id,
+    });
+  }
+
+  // ==================== Bank Conditions ====================
+
+  async getBankConditions(bankId: string) {
+    return this.prisma.bankCondition.findMany({
+      where: { bankId, isActive: true },
+      orderBy: { sortOrder: 'asc' as const },
+    });
+  }
+
+  async createBankCondition(bankId: string, dto: CreateBankConditionDto, userId: string) {
+    const bank = await this.prisma.bank.findUnique({ where: { id: bankId } });
+    if (!bank) throw new NotFoundException('errors.bankNotFound');
+
+    const condition = await this.prisma.bankCondition.create({
+      data: { bankId, name: dto.name, rate: dto.rate, sortOrder: dto.sortOrder ?? 0 },
+    });
+
+    await this.auditService.log({
+      userId,
+      action: 'bankCondition.created',
+      entity: 'bank',
+      entityId: bankId,
+      details: { name: dto.name, rate: dto.rate },
+    });
+
+    return condition;
+  }
+
+  async updateBankCondition(id: string, dto: UpdateBankConditionDto, userId: string) {
+    const condition = await this.prisma.bankCondition.findUnique({ where: { id } });
+    if (!condition) throw new NotFoundException('errors.notFound');
+
+    const updated = await this.prisma.bankCondition.update({ where: { id }, data: dto });
+
+    await this.auditService.log({
+      userId,
+      action: 'bankCondition.updated',
+      entity: 'bank',
+      entityId: condition.bankId,
+      details: dto,
+    });
+
+    return updated;
+  }
+
+  async deleteBankCondition(id: string, userId: string) {
+    const condition = await this.prisma.bankCondition.findUnique({ where: { id } });
+    if (!condition) throw new NotFoundException('errors.notFound');
+
+    await this.prisma.bankCondition.update({ where: { id }, data: { isActive: false } });
+
+    await this.auditService.log({
+      userId,
+      action: 'bankCondition.deleted',
+      entity: 'bank',
+      entityId: condition.bankId,
     });
   }
 

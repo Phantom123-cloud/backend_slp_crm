@@ -117,6 +117,10 @@ export class CreateContractDto {
   @IsOptional()
   bankAdvances?: Record<string, number>;
 
+  @IsObject()
+  @IsOptional()
+  bankConditions?: Record<string, { conditionId?: string; conditionName: string; conditionRate: number }>;
+
   @IsArray()
   @IsOptional()
   @ValidateNested({ each: true })
@@ -229,6 +233,10 @@ export class UpdateContractDto {
   @IsObject()
   @IsOptional()
   bankAdvances?: Record<string, number>;
+
+  @IsObject()
+  @IsOptional()
+  bankConditions?: Record<string, { conditionId?: string; conditionName: string; conditionRate: number }>;
 
   @IsArray()
   @IsOptional()

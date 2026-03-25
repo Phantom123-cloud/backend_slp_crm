@@ -23,6 +23,8 @@ import {
   UpdateExpenseTypeDto,
   CreateBankDto,
   UpdateBankDto,
+  CreateBankConditionDto,
+  UpdateBankConditionDto,
   CreateCompanyDto,
   UpdateCompanyDto,
 } from './dto/directories.dto';
@@ -159,6 +161,45 @@ export class DirectoriesController {
   createBank(@Body() dto: CreateBankDto, @CurrentUser('id') userId: string) {
     return this.directoriesService.createBank(dto, userId);
   }
+
+  // === Bank Conditions (должны быть ДО /banks/:id чтобы не перехватывались) ===
+
+  @Get('banks/:bankId/conditions')
+  @ApiOperation({ summary: 'Условия банка' })
+  getBankConditions(@Param('bankId') bankId: string) {
+    return this.directoriesService.getBankConditions(bankId);
+  }
+
+  @Post('banks/:bankId/conditions')
+  @RequireAnyPermission('directories.create')
+  @ApiOperation({ summary: 'Создать условие банка' })
+  createBankCondition(
+    @Param('bankId') bankId: string,
+    @Body() dto: CreateBankConditionDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.directoriesService.createBankCondition(bankId, dto, userId);
+  }
+
+  @Patch('banks/conditions/:id')
+  @RequireAnyPermission('directories.edit')
+  @ApiOperation({ summary: 'Обновить условие банка' })
+  updateBankCondition(
+    @Param('id') id: string,
+    @Body() dto: UpdateBankConditionDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.directoriesService.updateBankCondition(id, dto, userId);
+  }
+
+  @Delete('banks/conditions/:id')
+  @RequireAnyPermission('directories.edit')
+  @ApiOperation({ summary: 'Удалить (деактивировать) условие банка' })
+  deleteBankCondition(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.directoriesService.deleteBankCondition(id, userId);
+  }
+
+  // === Banks ===
 
   @Patch('banks/:id')
   @RequireAnyPermission('directories.edit')

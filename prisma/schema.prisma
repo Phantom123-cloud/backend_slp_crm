@@ -126,6 +126,7 @@ model User {
   contractsSpeaker    Contract[] @relation("ContractSpeaker")
   contractsSignedBy   Contract[] @relation("ContractSignedBy")
   contractsCreated    Contract[] @relation("ContractCreatedBy")
+  contractFilesUploaded ContractFile[] @relation("ContractFileUploadedBy")
 
   @@map("users")
 }
@@ -410,8 +411,24 @@ model Bank {
 
   tripBanks     TripBank[]
   contractBanks ContractBank[]
+  conditions    BankCondition[]
 
   @@map("banks")
+}
+
+model BankCondition {
+  id        String   @id @default(uuid())
+  bankId    String
+  name      String   // "24 месяца"
+  rate      Decimal  @db.Decimal(5, 2)  // 33.5
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  bank          Bank          @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  contractBanks ContractBank[]
+
+  @@map("bank_conditions")
 }
 
 model TripBank {
@@ -858,17 +875,38 @@ model Contract {
   banks            ContractBank[]
   phones           ContractPhone[]
   paymentSchedule  ContractPaymentSchedule[]
+  files            ContractFile[]
 
   @@map("contracts")
 }
 
+model ContractFile {
+  id           String   @id @default(uuid())
+  contractId   String
+  contract     Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  fileName     String   // оригинальное имя файла
+  filePath     String   // путь на диске
+  fileSize     Int
+  mimeType     String
+  uploadedById String?
+  uploadedBy   User?    @relation("ContractFileUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@map("contract_files")
+}
+
 model ContractBank {
-  id         String   @id @default(uuid())
-  contractId String
-  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  bankId     String
-  bank       Bank     @relation(fields: [bankId], references: [id])
-  advance    Decimal? @db.Decimal(14, 2)
+  id            String   @id @default(uuid())
+  contractId    String
+  contract      Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  bankId        String
+  bank          Bank     @relation(fields: [bankId], references: [id])
+  advance       Decimal? @db.Decimal(14, 2)
+  conditionId   String?
+  conditionName String?        // снимок названия условия
+  conditionRate Decimal?       @db.Decimal(5, 2)  // снимок процента
+
+  condition     BankCondition? @relation(fields: [conditionId], references: [id], onDelete: SetNull)
 
   @@unique([contractId, bankId])
   @@map("contract_banks")

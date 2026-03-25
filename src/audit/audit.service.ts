@@ -63,7 +63,10 @@ export class AuditService {
         where,
         include: {
           user: {
-            select: { id: true, firstName: true, lastName: true, email: true },
+            select: {
+              id: true, firstName: true, lastName: true, email: true,
+              role: { select: { name: true } },
+            },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -94,7 +97,10 @@ export class AuditService {
       where,
       include: {
         user: {
-          select: { id: true, firstName: true, lastName: true, email: true },
+          select: {
+            id: true, firstName: true, lastName: true, email: true,
+            role: { select: { name: true } },
+          },
         },
       },
       orderBy: { createdAt: 'desc' },

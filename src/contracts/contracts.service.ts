@@ -1,10 +1,15 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateContractDto, UpdateContractDto, RefundContractDto } from './dto/contracts.dto';
+import * as fs from 'fs';
+import * as path from 'path';
+import { v4 as uuid } from 'uuid';
+import { StreamableFile } from '@nestjs/common';
 
 @Injectable()
 export class ContractsService {
@@ -17,7 +22,15 @@ export class ContractsService {
   private get fullInclude() {
     return {
       presentation: {
-        select: { id: true, name: true, number: true, date: true, time: true },
+        select: {
+          id: true, name: true, number: true, date: true, time: true,
+          coordinator: { select: { id: true, firstName: true, lastName: true } },
+          crew: {
+            include: {
+              user: { select: { id: true, firstName: true, lastName: true } },
+            },
+          },
+        },
       },
       trip: {
         select: { id: true, name: true, teamName: true },
@@ -26,9 +39,13 @@ export class ContractsService {
       speaker: { select: { id: true, firstName: true, lastName: true } },
       signedBy: { select: { id: true, firstName: true, lastName: true } },
       createdBy: { select: { id: true, firstName: true, lastName: true } },
-      banks: { include: { bank: { select: { id: true, name: true } } } },
+      banks: { include: { bank: { include: { conditions: { where: { isActive: true }, orderBy: { sortOrder: 'asc' as const } } } } } },
       phones: { orderBy: { order: 'asc' as const } },
       paymentSchedule: { orderBy: { order: 'asc' as const } },
+      files: {
+        orderBy: { createdAt: 'asc' as const },
+        include: { uploadedBy: { select: { id: true, firstName: true, lastName: true } } },
+      },
     };
   }
 
@@ -115,10 +132,22 @@ export class ContractsService {
     const {
       bankIds,
       bankAdvances,
+      bankConditions,
       phones,
       paymentSchedule,
       ...rest
     } = dto;
+
+    // Авто-закрытие: если нет графика платежей и авансы покрывают полную сумму
+    const bankAdvancesTotal = bankAdvances
+      ? Object.values(bankAdvances).reduce((s, v) => s + (Number(v) || 0), 0)
+      : Number(dto.advanceBank ?? 0);
+    const totalAdvancesAtCreate =
+      Number(dto.advanceCash ?? 0) + Number(dto.advanceTerminal ?? 0) + bankAdvancesTotal;
+    const autoClose =
+      (!paymentSchedule || paymentSchedule.length === 0) &&
+      dto.totalAmount != null &&
+      totalAdvancesAtCreate >= Number(dto.totalAmount);
 
     const contract = await this.prisma.contract.create({
       data: {
@@ -130,9 +159,21 @@ export class ContractsService {
         advanceTerminal: dto.advanceTerminal ?? null,
         advanceBank: dto.advanceBank ?? null,
         firstPaymentDate: dto.firstPaymentDate ? new Date(dto.firstPaymentDate) : null,
+        ...(autoClose ? { paymentStatus: 'CLOSED' } : {}),
         createdById: userId,
         banks: bankIds?.length
-          ? { create: bankIds.map((bankId) => ({ bankId, advance: bankAdvances?.[bankId] ?? null })) }
+          ? {
+              create: bankIds.map((bankId) => {
+                const cond = bankConditions?.[bankId];
+                return {
+                  bankId,
+                  advance: bankAdvances?.[bankId] ?? null,
+                  conditionId: cond?.conditionId ?? null,
+                  conditionName: cond?.conditionName ?? null,
+                  conditionRate: cond?.conditionRate ?? null,
+                };
+              }),
+            }
           : undefined,
         phones: phones?.length
           ? {
@@ -176,6 +217,7 @@ export class ContractsService {
     const {
       bankIds,
       bankAdvances,
+      bankConditions,
       phones,
       paymentSchedule,
       contractDate,
@@ -194,7 +236,17 @@ export class ContractsService {
         await tx.contractBank.deleteMany({ where: { contractId: id } });
         if (bankIds.length > 0) {
           await tx.contractBank.createMany({
-            data: bankIds.map((bankId) => ({ contractId: id, bankId, advance: bankAdvances?.[bankId] ?? null })),
+            data: bankIds.map((bankId) => {
+              const cond = bankConditions?.[bankId];
+              return {
+                contractId: id,
+                bankId,
+                advance: bankAdvances?.[bankId] ?? null,
+                conditionId: cond?.conditionId ?? null,
+                conditionName: cond?.conditionName ?? null,
+                conditionRate: cond?.conditionRate ?? null,
+              };
+            }),
           });
         }
       }
@@ -308,7 +360,30 @@ export class ContractsService {
     if (!existing) throw new NotFoundException('errors.contractNotFound');
 
     // totalAmount вырезаем из rest — в updateFinancials оно идёт в amountAfterRefund, сам totalAmount не меняем
-    const { bankIds, bankAdvances, phones, paymentSchedule, totalAmount, advanceCash, advanceTerminal, advanceBank, firstPaymentDate, installmentMonths, ...rest } = dto;
+    const { bankIds, bankAdvances, bankConditions, phones, paymentSchedule, totalAmount, advanceCash, advanceTerminal, advanceBank, firstPaymentDate, installmentMonths, ...rest } = dto;
+
+    // Вычисляем значения заранее — нужны и внутри транзакции, и в аудит-логе
+    const hasInstallment =
+      (dto.paymentType === 'COMPANY' || dto.paymentType === 'MIXED') &&
+      dto.installmentMonths &&
+      paymentSchedule && paymentSchedule.length > 0;
+
+    const newAdvanceCash = Number(advanceCash ?? 0);
+    const newAdvanceTerminal = Number(advanceTerminal ?? 0);
+    const bankAdvancesTotal = bankAdvances
+      ? Object.values(bankAdvances).reduce((sum, v) => sum + (Number(v) || 0), 0)
+      : Number(advanceBank ?? 0);
+    const totalAdvances = newAdvanceCash + newAdvanceTerminal + bankAdvancesTotal;
+    const computedAmountAfterRefund = hasInstallment
+      ? (totalAmount ?? existing.totalAmount)
+      : totalAdvances;
+
+    const isPartialRefund = Number(computedAmountAfterRefund) < Number(existing.totalAmount);
+    const autoCloseFinancials =
+      !isPartialRefund &&
+      !hasInstallment &&
+      totalAdvances >= Number(existing.totalAmount);
+    const newPaymentStatus = isPartialRefund ? 'PARTIAL_REFUND' : autoCloseFinancials ? 'CLOSED' : 'OPEN';
 
     await this.prisma.$transaction(async (tx) => {
       // Обновляем банки если переданы
@@ -316,11 +391,17 @@ export class ContractsService {
         await tx.contractBank.deleteMany({ where: { contractId: id } });
         if (bankIds.length > 0) {
           await tx.contractBank.createMany({
-            data: bankIds.map((bankId) => ({
-              contractId: id,
-              bankId,
-              advance: bankAdvances?.[bankId] ?? null,
-            })),
+            data: bankIds.map((bankId) => {
+              const cond = bankConditions?.[bankId];
+              return {
+                contractId: id,
+                bankId,
+                advance: bankAdvances?.[bankId] ?? null,
+                conditionId: cond?.conditionId ?? null,
+                conditionName: cond?.conditionName ?? null,
+                conditionRate: cond?.conditionRate ?? null,
+              };
+            }),
           });
         }
       }
@@ -339,30 +420,11 @@ export class ContractsService {
         });
       }
 
-      // Рассрочка считается активной только если есть месяцы И непустой график
-      const hasInstallment =
-        (dto.paymentType === 'COMPANY' || dto.paymentType === 'MIXED') &&
-        dto.installmentMonths &&
-        paymentSchedule && paymentSchedule.length > 0;
-
-      // Если рассрочка убрана — amountAfterRefund = сумма авансов (рассрочка обнуляется)
-      // Если рассрочка есть — amountAfterRefund = totalAmount из формы (введённое пользователем)
-      const newAdvanceCash = Number(advanceCash ?? 0);
-      const newAdvanceTerminal = Number(advanceTerminal ?? 0);
-      // При MIXED/CREDIT банковские авансы приходят в bankAdvances (per-bank), advanceBank может быть 0
-      const bankAdvancesTotal = bankAdvances
-        ? Object.values(bankAdvances).reduce((sum, v) => sum + (Number(v) || 0), 0)
-        : Number(advanceBank ?? 0);
-      const totalAdvances = newAdvanceCash + newAdvanceTerminal + bankAdvancesTotal;
-      const computedAmountAfterRefund = hasInstallment
-        ? (totalAmount ?? existing.totalAmount)
-        : totalAdvances;
-
       await tx.contract.update({
         where: { id },
         data: {
           ...rest, // paymentType, saleType и др. — без totalAmount (деструктурирован выше)
-          paymentStatus: 'PARTIAL_REFUND',
+          paymentStatus: isPartialRefund ? 'PARTIAL_REFUND' : autoCloseFinancials ? 'CLOSED' : 'OPEN',
           // totalAmount НЕ обновляем — исходная сумма договора (до возврата)
           amountAfterRefund: computedAmountAfterRefund,
           advanceCash: advanceCash ?? null,
@@ -383,7 +445,22 @@ export class ContractsService {
       action: 'contract.financialsUpdated',
       entity: 'contract',
       entityId: id,
-      details: rest,
+      details: {
+        before: {
+          amountAfterRefund: Number(existing.amountAfterRefund ?? existing.totalAmount),
+          advanceCash: Number(existing.advanceCash ?? 0),
+          advanceTerminal: Number(existing.advanceTerminal ?? 0),
+          advanceBank: Number(existing.advanceBank ?? 0),
+          paymentStatus: existing.paymentStatus,
+        },
+        after: {
+          amountAfterRefund: Number(computedAmountAfterRefund),
+          advanceCash: Number(advanceCash ?? 0),
+          advanceTerminal: Number(advanceTerminal ?? 0),
+          advanceBank: Number(bankAdvancesTotal > 0 ? bankAdvancesTotal : (advanceBank ?? 0)),
+          paymentStatus: newPaymentStatus,
+        },
+      },
     });
 
     return this.findOne(id);
@@ -393,6 +470,23 @@ export class ContractsService {
   async updateStatus(id: string, status: string, userId: string) {
     const contract = await this.prisma.contract.findUnique({ where: { id } });
     if (!contract) throw new NotFoundException('errors.contractNotFound');
+
+    // Нельзя отменить верификацию если по договору уже проводились финансовые операции
+    if (status === 'UNVERIFIED' && contract.paymentStatus !== 'OPEN') {
+      throw new BadRequestException(
+        'Нельзя отменить верификацию: по договору уже проводились финансовые операции.',
+      );
+    }
+
+    // Для верификации обязательно наличие хотя бы одного файла
+    if (status === 'VERIFIED') {
+      const fileCount = await this.prisma.contractFile.count({ where: { contractId: id } });
+      if (fileCount === 0) {
+        throw new BadRequestException(
+          'Невозможно верифицировать договор без вложений. Загрузите хотя бы один файл.',
+        );
+      }
+    }
 
     const updated = await this.prisma.contract.update({
       where: { id },
@@ -405,7 +499,7 @@ export class ContractsService {
       action: 'contract.statusChanged',
       entity: 'contract',
       entityId: id,
-      details: { status },
+      details: { from: contract.status, to: status },
     });
 
     return updated;
@@ -418,9 +512,22 @@ export class ContractsService {
     });
     if (!item) throw new NotFoundException('errors.scheduleItemNotFound');
 
-    await this.prisma.contractPaymentSchedule.update({
-      where: { id: scheduleItemId },
-      data: { isPaid: true },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.contractPaymentSchedule.update({
+        where: { id: scheduleItemId },
+        data: { isPaid: true },
+      });
+
+      // Авто-закрытие: если все платежи по графику оплачены — переводим договор в CLOSED
+      const remaining = await tx.contractPaymentSchedule.count({
+        where: { contractId: item.contractId, isPaid: false, id: { not: scheduleItemId } },
+      });
+      if (remaining === 0) {
+        await tx.contract.update({
+          where: { id: item.contractId },
+          data: { paymentStatus: 'CLOSED' },
+        });
+      }
     });
 
     await this.auditService.log({
@@ -441,9 +548,23 @@ export class ContractsService {
     });
     if (!item) throw new NotFoundException('errors.scheduleItemNotFound');
 
-    await this.prisma.contractPaymentSchedule.update({
-      where: { id: scheduleItemId },
-      data: { isPaid: false },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.contractPaymentSchedule.update({
+        where: { id: scheduleItemId },
+        data: { isPaid: false },
+      });
+
+      // Если договор был CLOSED — откатываем обратно в OPEN
+      const contract = await tx.contract.findUnique({
+        where: { id: item.contractId },
+        select: { paymentStatus: true },
+      });
+      if (contract?.paymentStatus === 'CLOSED') {
+        await tx.contract.update({
+          where: { id: item.contractId },
+          data: { paymentStatus: 'OPEN' },
+        });
+      }
     });
 
     await this.auditService.log({
@@ -455,6 +576,80 @@ export class ContractsService {
     });
 
     return this.findOne(item.contractId);
+  }
+
+  /** Загрузить файл к договору */
+  async uploadFile(contractId: string, file: Express.Multer.File, userId: string) {
+    const contract = await this.prisma.contract.findUnique({ where: { id: contractId } });
+    if (!contract) throw new NotFoundException('errors.contractNotFound');
+
+    // Лимит 15 файлов
+    const count = await this.prisma.contractFile.count({ where: { contractId } });
+    if (count >= 15) throw new BadRequestException('Максимум 15 файлов на договор.');
+
+    // Только изображения и PDF
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    if (!allowed.includes(file.mimetype)) {
+      throw new BadRequestException('Разрешены только изображения и PDF.');
+    }
+
+    // Сохраняем файл на диск
+    const dir = path.join('./uploads', 'contracts', contractId);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    const ext = path.extname(file.originalname);
+    const savedName = `${uuid()}${ext}`;
+    const filePath = path.join(dir, savedName);
+    fs.writeFileSync(filePath, file.buffer);
+
+    const doc = await this.prisma.contractFile.create({
+      data: {
+        contractId,
+        fileName: file.originalname,
+        filePath,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+        uploadedById: userId,
+      },
+      include: { uploadedBy: { select: { id: true, firstName: true, lastName: true } } },
+    });
+
+    await this.auditService.log({
+      userId,
+      action: 'contract.fileUploaded',
+      entity: 'contract',
+      entityId: contractId,
+      details: { fileName: file.originalname, fileSize: file.size },
+    });
+
+    return doc;
+  }
+
+  /** Удалить файл договора */
+  async deleteFile(fileId: string, userId: string) {
+    const doc = await this.prisma.contractFile.findUnique({ where: { id: fileId } });
+    if (!doc) throw new NotFoundException('errors.fileNotFound');
+
+    if (fs.existsSync(doc.filePath)) fs.unlinkSync(doc.filePath);
+    await this.prisma.contractFile.delete({ where: { id: fileId } });
+
+    await this.auditService.log({
+      userId,
+      action: 'contract.fileDeleted',
+      entity: 'contract',
+      entityId: doc.contractId,
+      details: { fileName: doc.fileName },
+    });
+  }
+
+  /** Скачать/показать файл договора */
+  async downloadFile(fileId: string) {
+    const doc = await this.prisma.contractFile.findUnique({ where: { id: fileId } });
+    if (!doc) throw new NotFoundException('errors.fileNotFound');
+    if (!fs.existsSync(doc.filePath)) throw new NotFoundException('errors.fileNotFoundOnDisk');
+
+    const stream = fs.createReadStream(doc.filePath);
+    return { stream: new StreamableFile(stream), fileName: doc.fileName, mimeType: doc.mimeType };
   }
 
   /** Удалить договор */

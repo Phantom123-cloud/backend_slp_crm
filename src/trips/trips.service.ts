@@ -655,7 +655,14 @@ export class TripsService {
     const tripBanks = await this.prisma.tripBank.findMany({
       where: { tripId },
       include: {
-        bank: true,
+        bank: {
+          include: {
+            conditions: {
+              where: { isActive: true },
+              orderBy: { sortOrder: 'asc' as const },
+            },
+          },
+        },
       },
       orderBy: { bank: { name: 'asc' } },
     });

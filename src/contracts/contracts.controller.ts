@@ -8,8 +8,13 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  Res,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { ContractsService } from './contracts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
@@ -129,6 +134,44 @@ export class ContractsController {
     @CurrentUser('id') userId: string,
   ) {
     return this.contractsService.payScheduleItem(scheduleItemId, userId);
+  }
+
+  @Post(':id/files')
+  @RequireAnyPermission('contracts.edit', 'contracts.verify')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Загрузить файл к договору (до 2МБ, jpg/png/pdf)' })
+  uploadFile(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.contractsService.uploadFile(id, file, userId);
+  }
+
+  @Delete(':id/files/:fileId')
+  @RequireAnyPermission('contracts.edit', 'contracts.verify')
+  @ApiOperation({ summary: 'Удалить файл договора' })
+  deleteFile(
+    @Param('fileId') fileId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.contractsService.deleteFile(fileId, userId);
+  }
+
+  @Get(':id/files/:fileId/download')
+  @RequireAnyPermission('contracts.view-all', 'contracts.view-person')
+  @ApiOperation({ summary: 'Скачать файл договора' })
+  async downloadFile(
+    @Param('fileId') fileId: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { stream, fileName, mimeType } = await this.contractsService.downloadFile(fileId);
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Disposition': `inline; filename="${encodeURIComponent(fileName)}"`,
+    });
+    return stream;
   }
 
   @Delete(':id')

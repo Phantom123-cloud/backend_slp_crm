@@ -16,6 +16,17 @@ export class StatsController {
    *   groupBy  — способ группировки: day | week | month | year | trip
    *   tab      — вкладка: dates | leaders | coordinators | individual
    */
+  @Get('contracts')
+  async getContractStats(
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    toDate.setHours(23, 59, 59, 999);
+    return this.statsService.getContractStats(fromDate, toDate);
+  }
+
   @Get('presentations')
   async getPresentationStats(
     @Query('from') from: string,

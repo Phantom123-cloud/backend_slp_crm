@@ -24,6 +24,11 @@ interface SummaryStats {
   rewriteValue: number | null;
 }
 
+interface TurnoverStats {
+  turnoverBefore: number;
+  turnoverAfter: number;
+}
+
 // ---- Вспомогательные функции ----
 
 /** Пустая статистика гостей (все нули) */
@@ -89,6 +94,27 @@ function computeGuestStats(records: any[]): GuestStats {
     notLetPairs: calcPairs(notLetRecs),
     inHallGuests: calcGuests(inHallRecs),
     inHallPairs: calcPairs(inHallRecs),
+  };
+}
+
+/** Вычисляет оборот до и после возврата из массива договоров */
+function computeTurnover(contracts: any[]): TurnoverStats {
+  // Берём только верифицированные договора
+  const active = contracts.filter((c) => c.status === 'VERIFIED');
+  return {
+    turnoverBefore: active.reduce((s, c) => s + Number(c.totalAmount ?? 0), 0),
+    turnoverAfter: active.reduce(
+      (s, c) => s + Number(c.amountAfterRefund ?? c.totalAmount ?? 0),
+      0,
+    ),
+  };
+}
+
+/** Суммирует два объекта TurnoverStats */
+function addTurnover(a: TurnoverStats, b: TurnoverStats): TurnoverStats {
+  return {
+    turnoverBefore: a.turnoverBefore + b.turnoverBefore,
+    turnoverAfter: a.turnoverAfter + b.turnoverAfter,
   };
 }
 
@@ -192,6 +218,227 @@ const MONTH_NAMES_RU = [
 export class StatsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // ==================== Отчёт по договорам ====================
+
+  async getContractStats(fromDate: Date, toDate: Date) {
+    // Загружаем все договора за период (по дате договора)
+    const contracts = await this.prisma.contract.findMany({
+      where: {
+        contractDate: { gte: fromDate, lte: toDate },
+      },
+      include: {
+        banks: { include: { bank: true } },
+        signedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    const total = contracts.length;
+    // Уникальные презентации, по которым есть договора
+    const uniquePresentationIds = new Set(contracts.map(c => c.presentationId).filter(Boolean));
+    const presentationsCount = uniquePresentationIds.size;
+    let turnoverBefore = 0;
+    let turnoverAfter = 0;
+    let refundsCount = 0;
+    let partialRefundsCount = 0;
+
+    // Счётчики по дням для линейного графика
+    const byDateMap: Record<string, { date: string; count: number; amount: number; realMoney: number }> = {};
+
+    // Счётчики по источникам
+    const bankMap: Record<string, {
+      name: string; advance: number; realMoney: number;
+      refundAmount: number; partialRefundAmount: number;
+      refundRealMoney: number; partialRefundRealMoney: number;
+    }> = {};
+    let cashTotal = 0, cashRefund = 0, cashPartial = 0;
+    let terminalTotal = 0, terminalRefund = 0, terminalPartial = 0;
+
+    // Группировка по менеджерам и типам сделок
+    const managerMap: Record<string, { name: string; count: number; turnover: number; realMoney: number }> = {};
+    const saleTypeMap: Record<string, { label: string; count: number; turnover: number }> = {};
+
+    for (const c of contracts) {
+      const amount = Number(c.totalAmount ?? 0);
+      const afterRefund = c.amountAfterRefund != null ? Number(c.amountAfterRefund) : amount;
+      const partialDiff = Math.max(0, amount - afterRefund); // сумма частичного возврата
+      turnoverBefore += amount;
+      turnoverAfter += afterRefund;
+
+      const isRefund = c.paymentStatus === 'REFUND';
+      const isPartial = c.paymentStatus === 'PARTIAL_REFUND';
+      if (isRefund) refundsCount++;
+      if (isPartial) partialRefundsCount++;
+
+      // Менеджер (подписавший договор)
+      const managerId = c.signedById;
+      const managerName = c.signedBy
+        ? `${c.signedBy.firstName ?? ''} ${c.signedBy.lastName ?? ''}`.trim() || 'Неизвестно'
+        : 'Неизвестно';
+      if (!managerMap[managerId]) managerMap[managerId] = { name: managerName, count: 0, turnover: 0, realMoney: 0 };
+      if (!isRefund) {
+        managerMap[managerId].count++;
+        managerMap[managerId].turnover += amount;
+      }
+
+      // Тип сделки
+      const st = c.saleType ?? 'OTHER';
+      const stLabel = st === 'RAFFLE' ? 'Розыгрыш' : st === 'HOURLY' ? 'Почасовой' : 'Без типа';
+      if (!saleTypeMap[st]) saleTypeMap[st] = { label: stLabel, count: 0, turnover: 0 };
+      saleTypeMap[st].count++;
+      saleTypeMap[st].turnover += amount;
+
+      // По дням
+      const dateKey = c.contractDate.toISOString().slice(0, 10);
+      if (!byDateMap[dateKey]) byDateMap[dateKey] = { date: dateKey, count: 0, amount: 0, realMoney: 0 };
+      byDateMap[dateKey].count++;
+      byDateMap[dateKey].amount += amount;
+
+      // Авансы (для REFUND авансы обнулены, берём фактические значения)
+      const cash = Number(c.advanceCash ?? 0);
+      const terminal = Number(c.advanceTerminal ?? 0);
+      cashTotal += cash;
+      terminalTotal += terminal;
+
+      // Банковские авансы: для REFUND берём totalAmount минус наличные/терминал как банковскую часть
+      const bankAdvTotal = c.banks.reduce((s, b) => s + (b.advance != null ? Number(b.advance) : 0), 0);
+
+      // Пропорциональное распределение возвратов по источникам.
+      // Для полного REFUND: авансы обнулены → определяем источник по типу оплаты
+      if (isRefund) {
+        const pt = c.paymentType;
+        if (pt === 'CASH') {
+          cashRefund += amount;
+        } else if (pt === 'TERMINAL') {
+          terminalRefund += amount;
+        } else if (pt === 'CREDIT') {
+          // Кредит — весь возврат на первый банк
+          const firstBank = c.banks[0];
+          const bankName = firstBank?.bank?.name ?? 'Банк';
+          if (!bankMap[bankName]) bankMap[bankName] = { name: bankName, advance: 0, realMoney: 0, refundAmount: 0, partialRefundAmount: 0, refundRealMoney: 0, partialRefundRealMoney: 0 };
+          const refundRate = firstBank?.conditionRate != null ? Number(firstBank.conditionRate) : 0;
+          bankMap[bankName].refundAmount += amount;
+          // Реальные деньги возврата с учётом комиссии банка
+          bankMap[bankName].refundRealMoney += amount * (1 - refundRate / 100);
+        } else {
+          // MIXED / COMPANY: распределяем по числу источников поровну
+          const sources = c.banks.length + (cash > 0 ? 1 : 0) + (terminal > 0 ? 1 : 0) || 1;
+          const perSource = amount / sources;
+          if (cash > 0) cashRefund += perSource;
+          if (terminal > 0) terminalRefund += perSource;
+          for (const b of c.banks) {
+            const bankName = b.bank?.name ?? 'Банк';
+            const mixedRate = b.conditionRate != null ? Number(b.conditionRate) : 0;
+            if (!bankMap[bankName]) bankMap[bankName] = { name: bankName, advance: 0, realMoney: 0, refundAmount: 0, partialRefundAmount: 0, refundRealMoney: 0, partialRefundRealMoney: 0 };
+            bankMap[bankName].refundAmount += perSource;
+            bankMap[bankName].refundRealMoney += perSource * (1 - mixedRate / 100);
+          }
+        }
+      }
+
+      // Для PARTIAL_REFUND — пропорционально текущим авансам
+      if (isPartial) {
+        const totalAdv = cash + terminal + bankAdvTotal || 1;
+        cashPartial += partialDiff * (cash / totalAdv);
+        terminalPartial += partialDiff * (terminal / totalAdv);
+      }
+
+      // Реальные деньги по банкам
+      for (const b of c.banks) {
+        if (b.advance == null) continue;
+        const adv = Number(b.advance);
+        const rate = b.conditionRate != null ? Number(b.conditionRate) : 0;
+        const real = adv * (1 - rate / 100);
+        const bankName = b.bank?.name ?? 'Банк';
+        if (!bankMap[bankName]) bankMap[bankName] = { name: bankName, advance: 0, realMoney: 0, refundAmount: 0, partialRefundAmount: 0, refundRealMoney: 0, partialRefundRealMoney: 0 };
+        bankMap[bankName].advance += adv;
+        bankMap[bankName].realMoney += real;
+        byDateMap[dateKey].realMoney += real;
+
+        if (isPartial) {
+          const totalAdv = cash + terminal + bankAdvTotal || 1;
+          const bankPartialDiff = partialDiff * (adv / totalAdv);
+          bankMap[bankName].partialRefundAmount += bankPartialDiff;
+          bankMap[bankName].partialRefundRealMoney += bankPartialDiff * (1 - rate / 100);
+        }
+      }
+      byDateMap[dateKey].realMoney += cash + terminal;
+
+      // Реал. деньги менеджера = наличные + терминал + банки (с учётом комиссий)
+      if (!isRefund) {
+        const bankRealSum = c.banks.reduce((sum, b) => {
+          if (b.advance == null) return sum;
+          const r = b.conditionRate != null ? Number(b.conditionRate) : 0;
+          return sum + Number(b.advance) * (1 - r / 100);
+        }, 0);
+        managerMap[managerId].realMoney += cash + terminal + bankRealSum;
+      }
+    }
+
+    // Итоговый список источников
+    const bankStats = [
+      ...Object.values(bankMap),
+      // Наличные и терминал: нет комиссии, refundRealMoney = refundAmount
+      { name: 'Наличные', advance: cashTotal, realMoney: cashTotal, refundAmount: cashRefund, partialRefundAmount: cashPartial, refundRealMoney: cashRefund, partialRefundRealMoney: cashPartial },
+      { name: 'Терминал', advance: terminalTotal, realMoney: terminalTotal, refundAmount: terminalRefund, partialRefundAmount: terminalPartial, refundRealMoney: terminalRefund, partialRefundRealMoney: terminalPartial },
+    ]
+      .filter(b => b.advance > 0 || b.realMoney > 0 || b.refundAmount > 0 || b.partialRefundAmount > 0)
+      .map(b => ({
+        ...b,
+        // advanceBefore = текущий аванс + возвращённые авансы
+        advanceBefore: Math.round(b.advance + b.refundAmount + b.partialRefundAmount),
+        // realMoneyBefore = текущие реал. деньги + реал. деньги от возвращённых договоров (с учётом комиссии)
+        realMoneyBefore: Math.round(b.realMoney + b.refundRealMoney + b.partialRefundRealMoney),
+        refundAmount: Math.round(b.refundAmount),
+        partialRefundAmount: Math.round(b.partialRefundAmount),
+      }));
+
+    const totalRealMoney = bankStats.reduce((s, b) => s + b.realMoney, 0);
+    const totalRealMoneyBefore = bankStats.reduce((s, b) => s + b.realMoneyBefore, 0);
+    const totalAdvanceBefore = bankStats.reduce((s, b) => s + b.advanceBefore, 0);
+    const byDate = Object.values(byDateMap).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Данные для диаграммы возвратов по источникам
+    const refundChart = bankStats
+      .filter(b => b.refundAmount > 0 || b.partialRefundAmount > 0)
+      .map(b => ({
+        name: b.name,
+        refundAmount: Math.round(b.refundAmount),
+        partialRefundAmount: Math.round(b.partialRefundAmount),
+      }));
+
+    // Топ менеджеров — отдельно добавляем реал. деньги через bankStats недоступен, используем realMoney из bankMap
+    // Для менеджеров добавляем реал. деньги, считая по их договорам
+    const byManager = Object.values(managerMap)
+      .map(m => ({ ...m, turnover: Math.round(m.turnover), realMoney: Math.round(m.realMoney) }))
+      .sort((a, b) => b.turnover - a.turnover)
+      .slice(0, 10); // Топ-10
+
+    // Разбивка по типам сделок
+    const bySaleType = Object.values(saleTypeMap)
+      .map(s => ({ ...s, turnover: Math.round(s.turnover) }))
+      .sort((a, b) => b.turnover - a.turnover);
+
+    return {
+      total,
+      presentationsCount,
+      refundsCount,
+      partialRefundsCount,
+      turnoverBefore,
+      turnoverAfter,
+      totalRealMoney,
+      totalRealMoneyBefore,
+      totalAdvanceBefore,
+      avgContract: total > 0 ? Math.round(turnoverBefore / total) : 0,
+      avgPerPresentation: presentationsCount > 0 ? Math.round(turnoverBefore / presentationsCount) : 0,
+      avgPerPresentationAfter: presentationsCount > 0 ? Math.round(turnoverAfter / presentationsCount) : 0,
+      bankStats,
+      byDate,
+      refundChart,
+      byManager,
+      bySaleType,
+    };
+  }
+
   async getPresentationStats(
     fromDate: Date,
     toDate: Date,
@@ -235,6 +482,9 @@ export class StatsService {
           guestRecords: {
             select: { guestsCount: true, pairsCount: true, leftStatus: true },
           },
+          contracts: {
+            select: { totalAmount: true, amountAfterRefund: true, status: true },
+          },
           type: { select: { id: true, name: true } },
           venue: { select: { id: true, venueName: true, address: true, city: true } },
         },
@@ -264,6 +514,9 @@ export class StatsService {
           },
           guestRecords: {
             select: { guestsCount: true, pairsCount: true, leftStatus: true },
+          },
+          contracts: {
+            select: { totalAmount: true, amountAfterRefund: true, status: true },
           },
           type: { select: { id: true, name: true } },
           venue: { select: { id: true, venueName: true, address: true, city: true } },
@@ -356,12 +609,16 @@ export class StatsService {
       // Суммируем все summaryRows всех презентаций группы
       const allSummaryRows = pres.flatMap((p) => p.summaryRows);
       const summaryStats = mergeSummaryRows(allSummaryRows);
+      // Вычисляем оборот по всем договорам группы
+      const allContracts = pres.flatMap((p) => p.contracts ?? []);
+      const turnover = computeTurnover(allContracts);
 
       rows.push(
         formatRow(guestStats, summaryStats, {
           key,
           label,
           presentationsCount: pres.length,
+          ...turnover,
         }),
       );
     }
@@ -428,6 +685,9 @@ export class StatsService {
         .flatMap((p) => p.summaryRows)
         .filter((r) => r.userId === userId);
       const summaryStats = mergeSummaryRows(personalSummaryRows);
+      // Оборот по всем договорам презентаций этого ведущего
+      const allContracts = pres.flatMap((p) => p.contracts ?? []);
+      const turnover = computeTurnover(allContracts);
 
       rows.push(
         formatRow(guestStats, summaryStats, {
@@ -435,6 +695,7 @@ export class StatsService {
           label: `${user.firstName} ${user.lastName}`,
           userId,
           presentationsCount: pres.length,
+          ...turnover,
         }),
       );
     }
@@ -471,6 +732,9 @@ export class StatsService {
       // Сводная статистика — ВСЕ summaryRows всех презентаций координатора
       const allSummaryRows = pres.flatMap((p) => p.summaryRows);
       const summaryStats = mergeSummaryRows(allSummaryRows);
+      // Оборот по всем договорам презентаций этого координатора
+      const allContracts = pres.flatMap((p) => p.contracts ?? []);
+      const turnover = computeTurnover(allContracts);
 
       rows.push(
         formatRow(guestStats, summaryStats, {
@@ -478,6 +742,7 @@ export class StatsService {
           label: `${user.firstName} ${user.lastName}`,
           userId,
           presentationsCount: pres.length,
+          ...turnover,
         }),
       );
     }
@@ -522,6 +787,9 @@ export class StatsService {
         .flatMap((p) => p.summaryRows)
         .filter((r) => r.userId === userId);
       const summaryStats = mergeSummaryRows(personalSummaryRows);
+      // Оборот по всем договорам презентаций этого участника
+      const allContracts = pres.flatMap((p) => p.contracts ?? []);
+      const turnover = computeTurnover(allContracts);
 
       rows.push(
         formatRow(guestStats, summaryStats, {
@@ -530,6 +798,7 @@ export class StatsService {
           userId,
           role,
           presentationsCount: pres.length,
+          ...turnover,
         }),
       );
     }

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, IsNumber, IsBoolean, Max, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 // === Presentation Types ===
@@ -108,6 +108,50 @@ export class UpdateBankDto {
   @IsString()
   @IsOptional()
   description?: string;
+}
+
+// === Bank Condition DTOs ===
+
+export class CreateBankConditionDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  rate: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  sortOrder?: number;
+}
+
+export class UpdateBankConditionDto {
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  @Max(100)
+  rate?: number;
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  isActive?: boolean;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  sortOrder?: number;
 }
 
 // === Company DTOs ===
