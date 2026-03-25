@@ -290,7 +290,7 @@ export class StatsService {
       const managerName = c.signedBy
         ? `${c.signedBy.firstName ?? ''} ${c.signedBy.lastName ?? ''}`.trim() || 'Неизвестно'
         : 'Неизвестно';
-      if (!managerMap[managerId]) managerMap[managerId] = { name: managerName, count: 0, turnover: 0, realMoney: 0 };
+      if (!managerMap[managerId]) managerMap[managerId] = { id: managerId, name: managerName, count: 0, turnover: 0, realMoney: 0 };
       if (!isRefund) {
         managerMap[managerId].count++;
         managerMap[managerId].turnover += amount;
