@@ -220,15 +220,44 @@ export class StatsService {
 
   // ==================== Отчёт по договорам ====================
 
-  async getContractStats(fromDate: Date, toDate: Date) {
+  async getContractStats(fromDate: Date, toDate: Date, filterBy?: string, userId?: string) {
+    // Формируем фильтр по сотруднику если задан
+    const personFilter: any = {};
+    if (filterBy && userId) {
+      if (filterBy === 'coordinator') {
+        personFilter.presentation = { coordinatorId: userId };
+      } else if (filterBy === 'crew') {
+        personFilter.presentation = { crew: { some: { userId } } };
+      } else if (filterBy === 'employee') {
+        // Сотрудник — ищем по координатору ИЛИ ведущему
+        personFilter.presentation = {
+          OR: [{ coordinatorId: userId }, { crew: { some: { userId } } }],
+        };
+      }
+    }
+
     // Загружаем все договора за период (по дате договора)
     const contracts = await this.prisma.contract.findMany({
       where: {
         contractDate: { gte: fromDate, lte: toDate },
+        ...personFilter,
       },
       include: {
         banks: { include: { bank: true } },
         signedBy: { select: { id: true, firstName: true, lastName: true } },
+        presentation: {
+          select: {
+            coordinatorId: true,
+            coordinator: { select: { id: true, firstName: true, lastName: true } },
+            crew: {
+              select: {
+                userId: true,
+                role: true,
+                user: { select: { id: true, firstName: true, lastName: true } },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -256,6 +285,11 @@ export class StatsService {
     // Группировка по менеджерам и типам сделок
     const managerMap: Record<string, { name: string; count: number; turnover: number; realMoney: number }> = {};
     const saleTypeMap: Record<string, { label: string; count: number; turnover: number }> = {};
+
+    // Группировка по координаторам и ведущим (crew)
+    type PersonStat = { id: string; name: string; count: number; turnover: number; realMoney: number };
+    const coordMap: Record<string, PersonStat> = {};
+    const crewMap: Record<string, PersonStat> = {};
 
     for (const c of contracts) {
       const amount = Number(c.totalAmount ?? 0);
@@ -363,14 +397,36 @@ export class StatsService {
       }
       byDateMap[dateKey].realMoney += cash + terminal;
 
-      // Реал. деньги менеджера = наличные + терминал + банки (с учётом комиссий)
+      // Реал. деньги = наличные + терминал + банки (с учётом комиссий)
       if (!isRefund) {
         const bankRealSum = c.banks.reduce((sum, b) => {
           if (b.advance == null) return sum;
           const r = b.conditionRate != null ? Number(b.conditionRate) : 0;
           return sum + Number(b.advance) * (1 - r / 100);
         }, 0);
-        managerMap[managerId].realMoney += cash + terminal + bankRealSum;
+        const contractRealMoney = cash + terminal + bankRealSum;
+        managerMap[managerId].realMoney += contractRealMoney;
+
+        // Координатор презентации
+        if (c.presentation?.coordinator) {
+          const coord = c.presentation.coordinator;
+          const cid = coord.id;
+          const cname = `${coord.firstName ?? ''} ${coord.lastName ?? ''}`.trim() || 'Неизвестно';
+          if (!coordMap[cid]) coordMap[cid] = { id: cid, name: cname, count: 0, turnover: 0, realMoney: 0 };
+          coordMap[cid].count++;
+          coordMap[cid].turnover += amount;
+          coordMap[cid].realMoney += contractRealMoney;
+        }
+
+        // Ведущие (crew) презентации
+        for (const cm of c.presentation?.crew ?? []) {
+          const uid = cm.userId;
+          const uname = `${cm.user.firstName ?? ''} ${cm.user.lastName ?? ''}`.trim() || 'Неизвестно';
+          if (!crewMap[uid]) crewMap[uid] = { id: uid, name: uname, count: 0, turnover: 0, realMoney: 0 };
+          crewMap[uid].count++;
+          crewMap[uid].turnover += amount;
+          crewMap[uid].realMoney += contractRealMoney;
+        }
       }
     }
 
@@ -406,17 +462,38 @@ export class StatsService {
         partialRefundAmount: Math.round(b.partialRefundAmount),
       }));
 
-    // Топ менеджеров — отдельно добавляем реал. деньги через bankStats недоступен, используем realMoney из bankMap
-    // Для менеджеров добавляем реал. деньги, считая по их договорам
+    // Топ менеджеров
     const byManager = Object.values(managerMap)
       .map(m => ({ ...m, turnover: Math.round(m.turnover), realMoney: Math.round(m.realMoney) }))
       .sort((a, b) => b.turnover - a.turnover)
-      .slice(0, 10); // Топ-10
+      .slice(0, 10);
 
     // Разбивка по типам сделок
     const bySaleType = Object.values(saleTypeMap)
       .map(s => ({ ...s, turnover: Math.round(s.turnover) }))
       .sort((a, b) => b.turnover - a.turnover);
+
+    // Координаторы — сортировка по обороту
+    const byCoordinator = Object.values(coordMap)
+      .map(c => ({ ...c, turnover: Math.round(c.turnover), realMoney: Math.round(c.realMoney) }))
+      .sort((a, b) => b.turnover - a.turnover);
+
+    // Ведущие (crew) — сортировка по обороту
+    const byHost = Object.values(crewMap)
+      .map(c => ({ ...c, turnover: Math.round(c.turnover), realMoney: Math.round(c.realMoney) }))
+      .sort((a, b) => b.turnover - a.turnover);
+
+    // Все сотрудники (union координаторов и ведущих, без дублей)
+    const allEmployeeMap: Record<string, PersonStat & { roles: string[] }> = {};
+    for (const c of byCoordinator) {
+      if (!allEmployeeMap[c.id]) allEmployeeMap[c.id] = { ...c, roles: [] };
+      if (!allEmployeeMap[c.id].roles.includes('Координатор')) allEmployeeMap[c.id].roles.push('Координатор');
+    }
+    for (const c of byHost) {
+      if (!allEmployeeMap[c.id]) allEmployeeMap[c.id] = { ...c, roles: [] };
+      if (!allEmployeeMap[c.id].roles.includes('Ведущий')) allEmployeeMap[c.id].roles.push('Ведущий');
+    }
+    const byEmployee = Object.values(allEmployeeMap).sort((a, b) => b.turnover - a.turnover);
 
     return {
       total,
@@ -436,6 +513,9 @@ export class StatsService {
       refundChart,
       byManager,
       bySaleType,
+      byCoordinator,
+      byHost,
+      byEmployee,
     };
   }
 
