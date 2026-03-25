@@ -53,32 +53,52 @@ export class ContractsService {
   private async generateContractNumber(
     presentationId: string,
     contractDate: Date,
+    signedById: string,
   ): Promise<string> {
+    // Загружаем презентацию вместе с типом (для буквы)
     const pres = await this.prisma.presentation.findUnique({
       where: { id: presentationId },
-      select: { number: true },
+      select: {
+        type: { select: { letter: true } },
+      },
     });
     if (!pres) throw new NotFoundException('errors.presentationNotFound');
 
-    // Формат даты
+    // Загружаем оформляющего (для кода торгового)
+    const signer = await this.prisma.user.findUnique({
+      where: { id: signedById },
+      select: { tradeCode: true },
+    });
+
+    // Буква типа презентации (если не задана — пустая строка)
+    const letter = pres.type?.letter ?? '';
+
+    // Код торгового, дополненный до 3 цифр (если не задан — 000)
+    const tradeCode = signer?.tradeCode
+      ? String(signer.tradeCode).padStart(3, '0')
+      : '000';
+
+    // Формат даты: DDMMYY
     const d = contractDate;
     const dd = String(d.getDate()).padStart(2, '0');
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const yy = String(d.getFullYear()).slice(-2);
     const datePrefix = `${dd}${mm}${yy}`;
 
-    // Порядковый номер за этот день
+    // Порядковый номер договора этого сотрудника за этот день
     const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const dayEnd = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
 
-    const countToday = await this.prisma.contract.count({
+    const countByPerson = await this.prisma.contract.count({
       where: {
+        signedById,
         contractDate: { gte: dayStart, lt: dayEnd },
       },
     });
 
-    const seq = String(countToday + 1).padStart(3, '0');
-    return `${datePrefix}/${pres.number}П-${seq}`;
+    const personSeq = String(countByPerson + 1);
+    // Итоговый формат: 250326/1П-002
+    return `${datePrefix}/${personSeq}${letter}-${tradeCode}`;
   }
 
   /** Список всех договоров (с фильтром по праву) */
@@ -127,6 +147,7 @@ export class ContractsService {
     const contractNumber = await this.generateContractNumber(
       dto.presentationId,
       contractDate,
+      dto.signedById,
     );
 
     const {

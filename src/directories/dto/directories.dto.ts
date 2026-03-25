@@ -12,6 +12,11 @@ export class CreatePresentationTypeDto {
   @ApiPropertyOptional()
   @IsString()
   @IsOptional()
+  letter?: string; // Буква для номера договора
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
   description?: string;
 }
 
@@ -21,6 +26,11 @@ export class UpdatePresentationTypeDto {
   @IsNotEmpty()
   @IsOptional()
   name?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  letter?: string; // Буква для номера договора
 
   @ApiPropertyOptional()
   @IsString()

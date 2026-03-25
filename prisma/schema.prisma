@@ -382,6 +382,7 @@ model PresentationSummary {
 model PresentationType {
   id          String   @id @default(uuid())
   name        String   @unique
+  letter      String?  // Буква для номера договора (П, Р, С и т.д.)
   description String?
   createdAt   DateTime @default(now())
 
