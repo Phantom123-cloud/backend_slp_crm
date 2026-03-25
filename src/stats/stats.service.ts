@@ -243,6 +243,7 @@ export class StatsService {
         banks: { include: { bank: true } },
         signedBy: { select: { id: true, firstName: true, lastName: true } },
         speaker: { select: { id: true, firstName: true, lastName: true } },
+        paymentSchedule: { select: { amount: true, isPaid: true } },
       },
     });
 
@@ -449,6 +450,39 @@ export class StatsService {
       .map(s => ({ ...s, turnover: Math.round(s.turnover), realMoney: Math.round(s.realMoney) }))
       .sort((a, b) => b.turnover - a.turnover);
 
+    // ---- Статистика рассрочек ----
+    const installmentContracts = contracts.filter(
+      c => c.installmentMonths != null && c.paymentStatus !== 'REFUND',
+    );
+    const installmentCount = installmentContracts.length;
+
+    let expectedPaymentsTotal = 0;
+    let paidPaymentsTotal = 0;
+    let paidContractsCount = 0;
+
+    for (const c of installmentContracts) {
+      const schedules = c.paymentSchedule ?? [];
+      const expected = schedules.reduce((s, p) => s + Number(p.amount), 0);
+      const paid = schedules.filter(p => p.isPaid).reduce((s, p) => s + Number(p.amount), 0);
+      expectedPaymentsTotal += expected;
+      paidPaymentsTotal += paid;
+      // Договор считается оплаченным если paymentStatus = CLOSED
+      if (c.paymentStatus === 'CLOSED') paidContractsCount++;
+    }
+
+    const installmentStats = {
+      installmentCount,
+      expectedPaymentsTotal: Math.round(expectedPaymentsTotal),
+      paidPaymentsTotal: Math.round(paidPaymentsTotal),
+      paidPaymentsPct: expectedPaymentsTotal > 0
+        ? Math.round((paidPaymentsTotal / expectedPaymentsTotal) * 100 * 10) / 10
+        : 0,
+      paidContractsCount,
+      paidContractsPct: installmentCount > 0
+        ? Math.round((paidContractsCount / installmentCount) * 100 * 10) / 10
+        : 0,
+    };
+
     return {
       total,
       presentationsCount,
@@ -468,6 +502,7 @@ export class StatsService {
       byManager,
       bySpeaker,
       bySaleType,
+      installmentStats,
     };
   }
 
