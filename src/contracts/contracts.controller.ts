@@ -20,7 +20,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequireAnyPermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CreateContractDto, UpdateContractDto, RefundContractDto } from './dto/contracts.dto';
+import { CreateContractDto, UpdateContractDto, RefundContractDto, AddContractItemDto } from './dto/contracts.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('Contracts')
@@ -189,6 +189,28 @@ export class ContractsController {
       'Content-Disposition': `inline; filename="${encodeURIComponent(fileName)}"`,
     });
     return stream;
+  }
+
+  @Post(':id/items')
+  @RequireAnyPermission('contracts.edit')
+  @ApiOperation({ summary: 'Добавить товар к договору' })
+  addItem(
+    @Param('id') id: string,
+    @Body() dto: AddContractItemDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.contractsService.addItem(id, dto, userId);
+  }
+
+  @Delete(':id/items/:itemId')
+  @RequireAnyPermission('contracts.edit')
+  @ApiOperation({ summary: 'Удалить товар из договора' })
+  removeItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.contractsService.removeItem(id, itemId, userId);
   }
 
   @Delete(':id')

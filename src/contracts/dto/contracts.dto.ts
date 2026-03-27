@@ -164,6 +164,24 @@ export class RefundContractDto {
   amountAfterRefund?: number;
 }
 
+export enum ContractItemTypeDto {
+  SALE = 'SALE',
+  GIFT = 'GIFT',
+}
+
+export class AddContractItemDto {
+  @IsString()
+  @IsNotEmpty()
+  productId: string;
+
+  @IsNumber()
+  @Min(0.001)
+  quantity: number;
+
+  @IsEnum(ContractItemTypeDto)
+  type: ContractItemTypeDto;
+}
+
 export class UpdateContractDto {
   @IsString()
   @IsOptional()

@@ -5,7 +5,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { CreateContractDto, UpdateContractDto, RefundContractDto } from './dto/contracts.dto';
+import { TransactionType } from '@prisma/client';
+import { CreateContractDto, UpdateContractDto, RefundContractDto, AddContractItemDto } from './dto/contracts.dto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
@@ -33,7 +34,11 @@ export class ContractsService {
         },
       },
       trip: {
-        select: { id: true, name: true, teamName: true },
+        select: { id: true, name: true, teamName: true, warehouse: { select: { id: true } } },
+      },
+      contractItems: {
+        include: { product: true },
+        orderBy: { createdAt: 'asc' as const },
       },
       company: { select: { id: true, name: true } },
       speaker: { select: { id: true, firstName: true, lastName: true } },
@@ -680,6 +685,109 @@ export class ContractsService {
 
     const stream = fs.createReadStream(doc.filePath);
     return { stream: new StreamableFile(stream), fileName: doc.fileName, mimeType: doc.mimeType };
+  }
+
+  /** Добавить товар к договору → создаёт транзакцию в складе выезда */
+  async addItem(contractId: string, dto: AddContractItemDto, userId: string) {
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: { trip: { include: { warehouse: true } } },
+    });
+    if (!contract) throw new NotFoundException('errors.contractNotFound');
+
+    const warehouse = (contract.trip as any)?.warehouse;
+    if (!warehouse) throw new BadRequestException('errors.tripHasNoWarehouse');
+
+    const txType = dto.type === 'SALE' ? TransactionType.SALE : TransactionType.GIFT;
+
+    await this.prisma.$transaction(async (tx) => {
+      // Создаём транзакцию в складе (без ограничения 5 — это договорная)
+      const transaction = await tx.transaction.create({
+        data: {
+          type: txType,
+          fromWarehouseId: warehouse.id,
+          note: `Договор ${contract.contractNumber}`,
+          createdById: userId,
+          items: {
+            create: [{ productId: dto.productId, quantity: dto.quantity }],
+          },
+        },
+      });
+
+      // Обновляем остаток (может уйти в минус)
+      await tx.stock.upsert({
+        where: { warehouseId_productId: { warehouseId: warehouse.id, productId: dto.productId } },
+        create: { warehouseId: warehouse.id, productId: dto.productId, quantity: -dto.quantity },
+        update: { quantity: { decrement: dto.quantity } },
+      });
+
+      // Создаём запись товара в договоре
+      await tx.contractItem.create({
+        data: {
+          contractId,
+          productId: dto.productId,
+          quantity: dto.quantity,
+          type: txType,
+          transactionId: transaction.id,
+        },
+      });
+    });
+
+    return this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: this.fullInclude,
+    });
+  }
+
+  /** Удалить товар из договора → сторно транзакции в складе */
+  async removeItem(contractId: string, itemId: string, userId: string) {
+    const item = await this.prisma.contractItem.findUnique({
+      where: { id: itemId },
+      include: {
+        transaction: { include: { items: true } },
+      },
+    });
+    if (!item || item.contractId !== contractId) throw new NotFoundException('errors.contractItemNotFound');
+
+    await this.prisma.$transaction(async (tx) => {
+      const transaction = item.transaction;
+      if (transaction && transaction.fromWarehouseId) {
+        const warehouseId = transaction.fromWarehouseId;
+
+        // Создаём сторно транзакцию
+        await tx.transaction.create({
+          data: {
+            type: TransactionType.REVERSAL,
+            fromWarehouseId: warehouseId,
+            reversalOfId: transaction.id,
+            note: `Сторно по договору ${contractId}`,
+            createdById: userId,
+            items: {
+              create: transaction.items.map((i) => ({
+                productId: i.productId,
+                quantity: -Number(i.quantity),
+              })),
+            },
+          },
+        });
+
+        // Возвращаем остаток
+        for (const i of transaction.items) {
+          await tx.stock.upsert({
+            where: { warehouseId_productId: { warehouseId, productId: i.productId } },
+            create: { warehouseId, productId: i.productId, quantity: Number(i.quantity) },
+            update: { quantity: { increment: Number(i.quantity) } },
+          });
+        }
+      }
+
+      await tx.contractItem.delete({ where: { id: itemId } });
+    });
+
+    return this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: this.fullInclude,
+    });
   }
 
   /** Удалить договор */
