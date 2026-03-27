@@ -38,6 +38,34 @@ export class PaymentScheduleItemDto {
   isPaid?: boolean;
 }
 
+export enum ContractItemTypeDto {
+  SALE = 'SALE',
+  GIFT = 'GIFT',
+}
+
+export class ContractItemInputDto {
+  @IsString()
+  @IsNotEmpty()
+  productId: string;
+
+  @IsNumber()
+  @Min(0.001)
+  quantity: number;
+
+  @IsEnum(ContractItemTypeDto)
+  type: ContractItemTypeDto;
+}
+
+export class UpdateContractItemDto {
+  @IsNumber()
+  @Min(0.001)
+  quantity: number;
+
+  @IsString()
+  @IsOptional()
+  returnWarehouseId?: string; // если склад выезда неактивен
+}
+
 export class CreateContractDto {
   @IsString()
   @IsNotEmpty()
@@ -132,6 +160,12 @@ export class CreateContractDto {
   @ValidateNested({ each: true })
   @Type(() => PaymentScheduleItemDto)
   paymentSchedule?: PaymentScheduleItemDto[];
+
+  @IsArray()
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => ContractItemInputDto)
+  items?: ContractItemInputDto[];
 }
 
 // DTO для оформления возврата (обнуление авансов)
@@ -162,11 +196,6 @@ export class RefundContractDto {
   @IsOptional()
   @Min(0)
   amountAfterRefund?: number;
-}
-
-export enum ContractItemTypeDto {
-  SALE = 'SALE',
-  GIFT = 'GIFT',
 }
 
 export class AddContractItemDto {

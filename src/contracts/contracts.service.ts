@@ -6,7 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { TransactionType } from '@prisma/client';
-import { CreateContractDto, UpdateContractDto, RefundContractDto, AddContractItemDto } from './dto/contracts.dto';
+import { CreateContractDto, UpdateContractDto, RefundContractDto, AddContractItemDto, UpdateContractItemDto } from './dto/contracts.dto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
@@ -170,6 +170,7 @@ export class ContractsService {
       bankConditions,
       phones,
       paymentSchedule,
+      items,
       ...rest
     } = dto;
 
@@ -233,6 +234,45 @@ export class ContractsService {
       include: this.fullInclude,
     });
 
+    // Добавляем товары к договору, если переданы
+    if (items && items.length > 0) {
+      const trip = await this.prisma.trip.findUnique({
+        where: { id: dto.tripId },
+        include: { warehouse: true },
+      });
+      const warehouse = (trip as any)?.warehouse;
+      if (warehouse) {
+        for (const item of items) {
+          const txType = item.type === 'SALE' ? TransactionType.SALE : TransactionType.GIFT;
+          await this.prisma.$transaction(async (tx) => {
+            const transaction = await tx.transaction.create({
+              data: {
+                type: txType,
+                fromWarehouseId: warehouse.id,
+                note: `Договор ${contract.contractNumber}`,
+                createdById: userId,
+                items: { create: [{ productId: item.productId, quantity: item.quantity }] },
+              },
+            });
+            await tx.stock.upsert({
+              where: { warehouseId_productId: { warehouseId: warehouse.id, productId: item.productId } },
+              create: { warehouseId: warehouse.id, productId: item.productId, quantity: -item.quantity },
+              update: { quantity: { decrement: item.quantity } },
+            });
+            await tx.contractItem.create({
+              data: {
+                contractId: contract.id,
+                productId: item.productId,
+                quantity: item.quantity,
+                type: txType,
+                transactionId: transaction.id,
+              },
+            });
+          });
+        }
+      }
+    }
+
     await this.auditService.log({
       userId,
       action: 'contract.created',
@@ -241,7 +281,10 @@ export class ContractsService {
       details: { contractNumber: contract.contractNumber, clientName: dto.clientName },
     });
 
-    return contract;
+    return this.prisma.contract.findUnique({
+      where: { id: contract.id },
+      include: this.fullInclude,
+    });
   }
 
   /** Обновить договор */
@@ -685,6 +728,82 @@ export class ContractsService {
 
     const stream = fs.createReadStream(doc.filePath);
     return { stream: new StreamableFile(stream), fileName: doc.fileName, mimeType: doc.mimeType };
+  }
+
+  /** Обновить кол-во товара в договоре → корректирующая транзакция в складе */
+  async updateItem(contractId: string, itemId: string, dto: UpdateContractItemDto, userId: string) {
+    const item = await this.prisma.contractItem.findUnique({
+      where: { id: itemId },
+      include: { transaction: { include: { items: true } } },
+    });
+    if (!item || item.contractId !== contractId) throw new NotFoundException('errors.contractItemNotFound');
+
+    const oldQty = Number(item.quantity);
+    const newQty = dto.quantity;
+    const delta = newQty - oldQty; // > 0 — нужно взять больше, < 0 — вернуть разницу
+
+    if (Math.abs(delta) < 0.001) {
+      return this.prisma.contract.findUnique({ where: { id: contractId }, include: this.fullInclude });
+    }
+
+    const warehouseId = item.transaction?.fromWarehouseId;
+    if (!warehouseId) throw new BadRequestException('errors.noWarehouseOnTransaction');
+
+    // Определяем склад для операции
+    let targetWarehouseId = warehouseId;
+    if (delta < 0) {
+      // Возврат товара: если склад неактивен, нужен returnWarehouseId
+      const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
+      if (warehouse && !warehouse.isActive) {
+        if (!dto.returnWarehouseId) throw new BadRequestException('errors.warehouseInactiveNeedReturn');
+        targetWarehouseId = dto.returnWarehouseId;
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (delta > 0) {
+        // Берём больше из склада выезда
+        await tx.transaction.create({
+          data: {
+            type: item.type,
+            fromWarehouseId: warehouseId,
+            note: `Актуализация договора`,
+            createdById: userId,
+            items: { create: [{ productId: item.productId, quantity: delta }] },
+          },
+        });
+        await tx.stock.upsert({
+          where: { warehouseId_productId: { warehouseId, productId: item.productId } },
+          create: { warehouseId, productId: item.productId, quantity: -delta },
+          update: { quantity: { decrement: delta } },
+        });
+      } else {
+        // Возвращаем |delta| на целевой склад
+        const absDelta = Math.abs(delta);
+        const isReturn = targetWarehouseId !== warehouseId;
+        await tx.transaction.create({
+          data: {
+            type: TransactionType.INCOMING,
+            toWarehouseId: targetWarehouseId,
+            note: isReturn ? `Актуализация к-ва договора (возврат на склад)` : `Актуализация к-ва договора`,
+            createdById: userId,
+            items: { create: [{ productId: item.productId, quantity: absDelta }] },
+          },
+        });
+        await tx.stock.upsert({
+          where: { warehouseId_productId: { warehouseId: targetWarehouseId, productId: item.productId } },
+          create: { warehouseId: targetWarehouseId, productId: item.productId, quantity: absDelta },
+          update: { quantity: { increment: absDelta } },
+        });
+      }
+
+      await tx.contractItem.update({
+        where: { id: itemId },
+        data: { quantity: newQty },
+      });
+    });
+
+    return this.prisma.contract.findUnique({ where: { id: contractId }, include: this.fullInclude });
   }
 
   /** Добавить товар к договору → создаёт транзакцию в складе выезда */

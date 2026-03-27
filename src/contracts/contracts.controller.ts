@@ -20,7 +20,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequireAnyPermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { CreateContractDto, UpdateContractDto, RefundContractDto, AddContractItemDto } from './dto/contracts.dto';
+import { CreateContractDto, UpdateContractDto, RefundContractDto, AddContractItemDto, UpdateContractItemDto } from './dto/contracts.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
 @ApiTags('Contracts')
@@ -189,6 +189,18 @@ export class ContractsController {
       'Content-Disposition': `inline; filename="${encodeURIComponent(fileName)}"`,
     });
     return stream;
+  }
+
+  @Patch(':id/items/:itemId')
+  @RequireAnyPermission('contracts.edit')
+  @ApiOperation({ summary: 'Обновить кол-во товара в договоре' })
+  updateItem(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() dto: UpdateContractItemDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.contractsService.updateItem(id, itemId, dto, userId);
   }
 
   @Post(':id/items')
