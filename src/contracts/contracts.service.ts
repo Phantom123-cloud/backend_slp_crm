@@ -34,7 +34,7 @@ export class ContractsService {
         },
       },
       trip: {
-        select: { id: true, name: true, teamName: true, warehouse: { select: { id: true } } },
+        select: { id: true, name: true, teamName: true, status: true, warehouse: { select: { id: true } } },
       },
       contractItems: {
         include: { product: true },
@@ -752,9 +752,15 @@ export class ContractsService {
     // Определяем склад для операции
     let targetWarehouseId = warehouseId;
     if (delta < 0) {
-      // Возврат товара: если склад неактивен, нужен returnWarehouseId
+      // Возврат товара: если выезд закрыт или склад неактивен — нужен returnWarehouseId
+      const contract = await this.prisma.contract.findUnique({
+        where: { id: contractId },
+        include: { trip: { select: { status: true } } },
+      });
+      const tripClosed = contract?.trip?.status === 'CLOSED';
       const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
-      if (warehouse && !warehouse.isActive) {
+      const warehouseInactive = warehouse ? !warehouse.isActive : false;
+      if (tripClosed || warehouseInactive) {
         if (!dto.returnWarehouseId) throw new BadRequestException('errors.warehouseInactiveNeedReturn');
         targetWarehouseId = dto.returnWarehouseId;
       }
