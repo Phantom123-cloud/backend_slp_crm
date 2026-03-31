@@ -749,14 +749,17 @@ export class ContractsService {
     const warehouseId = item.transaction?.fromWarehouseId;
     if (!warehouseId) throw new BadRequestException('errors.noWarehouseOnTransaction');
 
+    // Загружаем договор для номера и статуса выезда
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      include: { trip: { select: { status: true } } },
+    });
+    const contractNumber = (contract as any)?.contractNumber ?? contractId;
+
     // Определяем склад для операции
     let targetWarehouseId = warehouseId;
     if (delta < 0) {
       // Возврат товара: если выезд закрыт или склад неактивен — нужен returnWarehouseId
-      const contract = await this.prisma.contract.findUnique({
-        where: { id: contractId },
-        include: { trip: { select: { status: true } } },
-      });
       const tripClosed = contract?.trip?.status === 'CLOSED';
       const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
       const warehouseInactive = warehouse ? !warehouse.isActive : false;
@@ -773,7 +776,7 @@ export class ContractsService {
           data: {
             type: item.type,
             fromWarehouseId: warehouseId,
-            note: `Актуализация договора`,
+            note: `Актуализация к-ва по договору ${contractNumber}`,
             createdById: userId,
             items: { create: [{ productId: item.productId, quantity: delta }] },
           },
@@ -791,7 +794,9 @@ export class ContractsService {
           data: {
             type: TransactionType.INCOMING,
             toWarehouseId: targetWarehouseId,
-            note: isReturn ? `Актуализация к-ва договора (возврат на склад)` : `Актуализация к-ва договора`,
+            note: isReturn
+              ? `Актуализация к-ва договора ${contractNumber} (возврат на склад)`
+              : `Актуализация к-ва договора ${contractNumber}`,
             createdById: userId,
             items: { create: [{ productId: item.productId, quantity: absDelta }] },
           },
@@ -812,7 +817,7 @@ export class ContractsService {
     return this.prisma.contract.findUnique({ where: { id: contractId }, include: this.fullInclude });
   }
 
-  /** Добавить товар к договору → создаёт транзакцию в складе выезда */
+  /** Добавить товар к договору → создаёт транзакцию в складе выезда (или sourceWarehouseId если выезд закрыт) */
   async addItem(contractId: string, dto: AddContractItemDto, userId: string) {
     const contract = await this.prisma.contract.findUnique({
       where: { id: contractId },
@@ -820,9 +825,16 @@ export class ContractsService {
     });
     if (!contract) throw new NotFoundException('errors.contractNotFound');
 
-    const warehouse = (contract.trip as any)?.warehouse;
-    if (!warehouse) throw new BadRequestException('errors.tripHasNoWarehouse');
+    const tripWarehouse = (contract.trip as any)?.warehouse;
+    if (!tripWarehouse) throw new BadRequestException('errors.tripHasNoWarehouse');
 
+    // Если выезд закрыт — нужен sourceWarehouseId
+    const tripClosed = (contract.trip as any)?.status === 'CLOSED';
+    if (tripClosed && !dto.sourceWarehouseId) {
+      throw new BadRequestException('errors.warehouseInactiveNeedSource');
+    }
+
+    const sourceWarehouseId = (tripClosed && dto.sourceWarehouseId) ? dto.sourceWarehouseId : tripWarehouse.id;
     const txType = dto.type === 'SALE' ? TransactionType.SALE : TransactionType.GIFT;
 
     await this.prisma.$transaction(async (tx) => {
@@ -830,7 +842,7 @@ export class ContractsService {
       const transaction = await tx.transaction.create({
         data: {
           type: txType,
-          fromWarehouseId: warehouse.id,
+          fromWarehouseId: sourceWarehouseId,
           note: `Договор ${contract.contractNumber}`,
           createdById: userId,
           items: {
@@ -841,8 +853,8 @@ export class ContractsService {
 
       // Обновляем остаток (может уйти в минус)
       await tx.stock.upsert({
-        where: { warehouseId_productId: { warehouseId: warehouse.id, productId: dto.productId } },
-        create: { warehouseId: warehouse.id, productId: dto.productId, quantity: -dto.quantity },
+        where: { warehouseId_productId: { warehouseId: sourceWarehouseId, productId: dto.productId } },
+        create: { warehouseId: sourceWarehouseId, productId: dto.productId, quantity: -dto.quantity },
         update: { quantity: { decrement: dto.quantity } },
       });
 

@@ -209,6 +209,10 @@ export class AddContractItemDto {
 
   @IsEnum(ContractItemTypeDto)
   type: ContractItemTypeDto;
+
+  @IsString()
+  @IsOptional()
+  sourceWarehouseId?: string; // если склад выезда закрыт — берём отсюда
 }
 
 export class UpdateContractDto {
