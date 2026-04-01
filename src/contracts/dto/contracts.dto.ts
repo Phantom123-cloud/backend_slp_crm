@@ -63,7 +63,11 @@ export class UpdateContractItemDto {
 
   @IsString()
   @IsOptional()
-  returnWarehouseId?: string; // если склад выезда неактивен
+  returnWarehouseId?: string; // если выезд закрыт и delta < 0 (возврат)
+
+  @IsString()
+  @IsOptional()
+  sourceWarehouseId?: string; // если выезд закрыт и delta > 0 (взять товар)
 }
 
 export class CreateContractDto {

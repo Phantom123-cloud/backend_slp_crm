@@ -757,33 +757,40 @@ export class ContractsService {
     const contractNumber = (contract as any)?.contractNumber ?? contractId;
 
     // Определяем склад для операции
-    let targetWarehouseId = warehouseId;
-    if (delta < 0) {
-      // Возврат товара: если выезд закрыт или склад неактивен — нужен returnWarehouseId
-      const tripClosed = contract?.trip?.status === 'CLOSED';
-      const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
-      const warehouseInactive = warehouse ? !warehouse.isActive : false;
-      if (tripClosed || warehouseInactive) {
-        if (!dto.returnWarehouseId) throw new BadRequestException('errors.warehouseInactiveNeedReturn');
-        targetWarehouseId = dto.returnWarehouseId;
-      }
+    const tripClosed = contract?.trip?.status === 'CLOSED';
+    const warehouse = await this.prisma.warehouse.findUnique({ where: { id: warehouseId } });
+    const warehouseInactive = warehouse ? !warehouse.isActive : false;
+    const tripOrWarehouseClosed = tripClosed || warehouseInactive;
+
+    let sourceWarehouseId = warehouseId; // откуда берём (delta > 0)
+    let targetWarehouseId = warehouseId; // куда возвращаем (delta < 0)
+
+    if (delta > 0 && tripOrWarehouseClosed) {
+      // Увеличение: нельзя взять из закрытого склада — нужен sourceWarehouseId
+      if (!dto.sourceWarehouseId) throw new BadRequestException('errors.warehouseInactiveNeedSource');
+      sourceWarehouseId = dto.sourceWarehouseId;
+    }
+    if (delta < 0 && tripOrWarehouseClosed) {
+      // Уменьшение: нельзя вернуть на закрытый склад — нужен returnWarehouseId
+      if (!dto.returnWarehouseId) throw new BadRequestException('errors.warehouseInactiveNeedReturn');
+      targetWarehouseId = dto.returnWarehouseId;
     }
 
     await this.prisma.$transaction(async (tx) => {
       if (delta > 0) {
-        // Берём больше из склада выезда
+        // Берём больше из sourceWarehouseId
         await tx.transaction.create({
           data: {
             type: item.type,
-            fromWarehouseId: warehouseId,
+            fromWarehouseId: sourceWarehouseId,
             note: `Актуализация к-ва по договору ${contractNumber}`,
             createdById: userId,
             items: { create: [{ productId: item.productId, quantity: delta }] },
           },
         });
         await tx.stock.upsert({
-          where: { warehouseId_productId: { warehouseId, productId: item.productId } },
-          create: { warehouseId, productId: item.productId, quantity: -delta },
+          where: { warehouseId_productId: { warehouseId: sourceWarehouseId, productId: item.productId } },
+          create: { warehouseId: sourceWarehouseId, productId: item.productId, quantity: -delta },
           update: { quantity: { decrement: delta } },
         });
       } else {
