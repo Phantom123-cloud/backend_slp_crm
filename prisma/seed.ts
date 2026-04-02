@@ -40,6 +40,7 @@ async function main() {
     { name: 'Удаление документов пользователей', slug: 'user_docs.delete', group: 'user_docs', description: 'Удаление документов пользователей' },
     // Session
     { name: 'Настройка лимита одновременных сессий', slug: 'session.manage', group: 'session', description: 'Настройка лимита одновременных сессий для любого аккаунта' },
+    { name: 'Принудительный вход (сброс сессий)', slug: 'session.force-login', group: 'session', description: 'При достижении лимита сессий позволяет принудительно завершить все старые сессии и войти в систему' },
     // Trips
     { name: 'Просмотр всех поездок', slug: 'trips.view-all', group: 'trips', description: 'Просмотр всех поездок в системе вне зависимости от участия' },
     { name: 'Просмотр своих поездок', slug: 'trips.view-person', group: 'trips', description: 'Просмотр поездок, в которых пользователь является членом команды, координатором или создателем' },

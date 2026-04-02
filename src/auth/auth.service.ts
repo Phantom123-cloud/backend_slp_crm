@@ -43,11 +43,15 @@ export class AuthService {
       where: { userId: user.id, expiresAt: { gt: new Date() } },
     });
     if (activeSessions >= user.maxSessions) {
-      if (dto.forceLogin) {
+      // Проверяем, есть ли у пользователя право на принудительный вход
+      const canForceLogin = await this.hasPermission(user.id, 'session.force-login');
+
+      if (dto.forceLogin && canForceLogin) {
         // Принудительный вход — удаляем все старые сессии
         await this.prisma.session.deleteMany({ where: { userId: user.id } });
       } else {
-        throw new ForbiddenException('errors.sessionLimit');
+        // Передаём флаг canForceLogin во фронт, чтобы он знал, показывать ли кнопку
+        throw new ForbiddenException({ message: 'errors.sessionLimit', canForceLogin });
       }
     }
 
@@ -289,6 +293,17 @@ export class AuthService {
     if (!user || !user.role) return [];
 
     return user.role.permissions.map((rp) => rp.permission.slug);
+  }
+
+  // Быстрая проверка конкретного права по userId (без JWT — для pre-auth проверок)
+  private async hasPermission(userId: string, slug: string): Promise<boolean> {
+    const count = await this.prisma.rolePermission.count({
+      where: {
+        role: { users: { some: { id: userId } } },
+        permission: { slug },
+      },
+    });
+    return count > 0;
   }
 
   private async generateTokens(
