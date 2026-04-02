@@ -56,7 +56,7 @@ export class ContractsController {
   }
 
   @Get('preview-number')
-  @RequireAnyPermission('contracts.create')
+  @RequireAnyPermission('contracts.create-any', 'contracts.create-own')
   @ApiOperation({ summary: 'Предпросмотр номера договора' })
   async previewNumber(
     @Query('presentationId') presentationId: string,
@@ -73,14 +73,14 @@ export class ContractsController {
   }
 
   @Get(':id')
-  @RequireAnyPermission('contracts.view-all', 'contracts.view-person')
+  @RequireAnyPermission('contracts.view-all', 'contracts.view-person', 'contracts.open')
   @ApiOperation({ summary: 'Получить договор' })
   findOne(@Param('id') id: string) {
     return this.contractsService.findOne(id);
   }
 
   @Post()
-  @RequireAnyPermission('contracts.create')
+  @RequireAnyPermission('contracts.create-any', 'contracts.create-own')
   @ApiOperation({ summary: 'Создать договор' })
   create(
     @Body() dto: CreateContractDto,
@@ -90,7 +90,7 @@ export class ContractsController {
   }
 
   @Patch(':id')
-  @RequireAnyPermission('contracts.edit')
+  @RequireAnyPermission('contracts.verify')
   @ApiOperation({ summary: 'Обновить договор' })
   update(
     @Param('id') id: string,
@@ -101,7 +101,7 @@ export class ContractsController {
   }
 
   @Patch(':id/refund')
-  @RequireAnyPermission('contracts.edit')
+  @RequireAnyPermission('contracts.verify')
   @ApiOperation({ summary: 'Оформить возврат по договору' })
   refund(
     @Param('id') id: string,
@@ -112,7 +112,7 @@ export class ContractsController {
   }
 
   @Patch(':id/financials')
-  @RequireAnyPermission('contracts.edit')
+  @RequireAnyPermission('contracts.verify')
   @ApiOperation({ summary: 'Редактировать финансы договора (→ частичный возврат)' })
   updateFinancials(
     @Param('id') id: string,
@@ -134,7 +134,7 @@ export class ContractsController {
   }
 
   @Patch('schedule/:scheduleItemId/unpay')
-  @RequireAnyPermission('contracts.edit')
+  @RequireAnyPermission('contracts.verify')
   @ApiOperation({ summary: 'Отменить подтверждение платежа по графику' })
   unpayScheduleItem(
     @Param('scheduleItemId') scheduleItemId: string,
@@ -144,7 +144,7 @@ export class ContractsController {
   }
 
   @Patch('schedule/:scheduleItemId/pay')
-  @RequireAnyPermission('contracts.edit')
+  @RequireAnyPermission('contracts.verify')
   @ApiOperation({ summary: 'Подтвердить платёж по графику рассрочки' })
   payScheduleItem(
     @Param('scheduleItemId') scheduleItemId: string,
@@ -154,7 +154,7 @@ export class ContractsController {
   }
 
   @Post(':id/files')
-  @RequireAnyPermission('contracts.edit', 'contracts.verify')
+  @RequireAnyPermission('contracts.verify')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 2 * 1024 * 1024 } }))
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Загрузить файл к договору (до 2МБ, jpg/png/pdf)' })
@@ -167,7 +167,7 @@ export class ContractsController {
   }
 
   @Delete(':id/files/:fileId')
-  @RequireAnyPermission('contracts.edit', 'contracts.verify')
+  @RequireAnyPermission('contracts.verify')
   @ApiOperation({ summary: 'Удалить файл договора' })
   deleteFile(
     @Param('fileId') fileId: string,
@@ -177,7 +177,7 @@ export class ContractsController {
   }
 
   @Get(':id/files/:fileId/download')
-  @RequireAnyPermission('contracts.view-all', 'contracts.view-person')
+  @RequireAnyPermission('contracts.view-all', 'contracts.view-person', 'contracts.open', 'contracts.view-files', 'contracts.verify')
   @ApiOperation({ summary: 'Скачать файл договора' })
   async downloadFile(
     @Param('fileId') fileId: string,
@@ -192,7 +192,7 @@ export class ContractsController {
   }
 
   @Patch(':id/items/:itemId')
-  @RequireAnyPermission('contracts.edit')
+  @RequireAnyPermission('contracts.verify')
   @ApiOperation({ summary: 'Обновить кол-во товара в договоре' })
   updateItem(
     @Param('id') id: string,
@@ -204,7 +204,7 @@ export class ContractsController {
   }
 
   @Post(':id/items')
-  @RequireAnyPermission('contracts.edit')
+  @RequireAnyPermission('contracts.verify')
   @ApiOperation({ summary: 'Добавить товар к договору' })
   addItem(
     @Param('id') id: string,
@@ -215,7 +215,7 @@ export class ContractsController {
   }
 
   @Delete(':id/items/:itemId')
-  @RequireAnyPermission('contracts.edit')
+  @RequireAnyPermission('contracts.verify')
   @ApiOperation({ summary: 'Удалить товар из договора' })
   removeItem(
     @Param('id') id: string,

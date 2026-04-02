@@ -85,12 +85,14 @@ async function main() {
     { name: 'Банки выезда', slug: 'trips.banks', group: 'trips', description: 'Управление списком банков, разрешённых для работы в выезде' },
     { name: 'Компании выезда', slug: 'trips.companies', group: 'trips', description: 'Управление списком компаний, разрешённых для работы в выезде' },
     // Contracts
-    { name: 'Просмотр всех договоров', slug: 'contracts.view-all', group: 'contracts', description: 'Просмотр всех договоров в системе' },
-    { name: 'Просмотр своих договоров', slug: 'contracts.view-person', group: 'contracts', description: 'Просмотр договоров, где пользователь является подписантом' },
-    { name: 'Создание договоров', slug: 'contracts.create', group: 'contracts', description: 'Создание новых договоров' },
-    { name: 'Редактирование договоров', slug: 'contracts.edit', group: 'contracts', description: 'Редактирование договоров' },
+    { name: 'Просмотр всех договоров', slug: 'contracts.view-all', group: 'contracts', description: 'Просмотр таблицы всех договоров в системе' },
+    { name: 'Просмотр своих договоров', slug: 'contracts.view-person', group: 'contracts', description: 'Просмотр таблицы договоров, где пользователь является подписантом' },
+    { name: 'Открытие договора', slug: 'contracts.open', group: 'contracts', description: 'Возможность открыть карточку договора (кнопка "+" в строке таблицы) и перейти на страницу договора' },
+    { name: 'Просмотр вложений договора', slug: 'contracts.view-files', group: 'contracts', description: 'Просмотр и скачивание прикреплённых файлов в договоре' },
+    { name: 'Внесение договоров (любому)', slug: 'contracts.create-any', group: 'contracts', description: 'Создание договора для любого сотрудника выезда (кнопка "Внести договор" в правом верхнем углу выезда)' },
+    { name: 'Внесение своих договоров', slug: 'contracts.create-own', group: 'contracts', description: 'Создание договора от своего имени через кнопку "Внести договор" в презентации (ФИО подтягивается автоматически)' },
     { name: 'Удаление договоров', slug: 'contracts.delete', group: 'contracts', description: 'Удаление договоров' },
-    { name: 'Верификация договоров', slug: 'contracts.verify', group: 'contracts', description: 'Смена статуса договора (верифицирован/не верифицирован/отменён)' },
+    { name: 'Верификация договоров', slug: 'contracts.verify', group: 'contracts', description: 'Верификация/отмена договора, редактирование данных, товарных позиций и загрузка файлов' },
   ];
 
   const createdPerms: Record<string, string> = {};
@@ -156,7 +158,7 @@ async function main() {
 
   // Cleanup deprecated permissions
   await prisma.permission.deleteMany({
-    where: { slug: { in: ['files.view', 'files.upload', 'files.delete', 'users.edit', 'users.delete'] } },
+    where: { slug: { in: ['files.view', 'files.upload', 'files.delete', 'users.edit', 'users.delete', 'contracts.create', 'contracts.edit'] } },
   });
 
   console.log('✅ Seed completed!');
