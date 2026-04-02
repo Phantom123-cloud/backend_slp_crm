@@ -43,7 +43,12 @@ export class AuthService {
       where: { userId: user.id, expiresAt: { gt: new Date() } },
     });
     if (activeSessions >= user.maxSessions) {
-      throw new ForbiddenException('errors.sessionLimit');
+      if (dto.forceLogin) {
+        // Принудительный вход — удаляем все старые сессии
+        await this.prisma.session.deleteMany({ where: { userId: user.id } });
+      } else {
+        throw new ForbiddenException('errors.sessionLimit');
+      }
     }
 
     // Генерируем токены

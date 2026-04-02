@@ -21,4 +21,9 @@ export class LoginDto {
   @IsBoolean()
   @IsOptional()
   rememberMe?: boolean;
+
+  @ApiProperty({ example: false, required: false, description: 'Принудительно завершить все старые сессии и войти' })
+  @IsBoolean()
+  @IsOptional()
+  forceLogin?: boolean;
 }
