@@ -314,7 +314,7 @@ export class PresentationsService {
   // ==================== Crew ====================
 
   async setCrew(id: string, dto: SetPresentationCrewDto, userId: string) {
-    await this.findById(id);
+    const presentation = await this.findById(id);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.presentationCrew.deleteMany({ where: { presentationId: id } });
@@ -326,6 +326,28 @@ export class PresentationsService {
             role: m.role,
           })),
         });
+      }
+
+      // Автоматически добавляем в состав выезда тех,
+      // кого нет в trip crew, с ролью TRADER
+      if (dto.crew.length > 0) {
+        const tripId = (presentation as any).tripId;
+        const existingTripCrew = await tx.tripCrew.findMany({
+          where: { tripId },
+          select: { userId: true },
+        });
+        const existingUserIds = new Set(existingTripCrew.map((c) => c.userId));
+
+        const newToTrip = dto.crew.filter((m) => !existingUserIds.has(m.userId));
+        if (newToTrip.length > 0) {
+          await tx.tripCrew.createMany({
+            data: newToTrip.map((m) => ({
+              tripId,
+              userId: m.userId,
+              role: 'TRADER',
+            })),
+          });
+        }
       }
     });
 
