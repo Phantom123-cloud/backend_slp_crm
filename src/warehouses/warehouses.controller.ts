@@ -39,6 +39,7 @@ export class WarehousesController {
   @RequireAnyPermission(
     'warehouses.view-all', 'warehouses.view-person', 'warehouses.manage',
     'warehouses.edit', 'warehouses.transaction', 'trips.admin',
+    'contracts.create-any', 'contracts.create-own',
   )
   @ApiOperation({ summary: 'Детальная страница склада' })
   findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
