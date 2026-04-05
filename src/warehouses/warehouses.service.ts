@@ -491,6 +491,15 @@ export class WarehousesService {
       }
     }
 
+    // contracts.create-any / create-own → доступ к складу выезда для заполнения договора
+    const canCreateContract = perms.includes('contracts.create-any') || perms.includes('contracts.create-own');
+    if (canCreateContract && warehouse.type === 'TRIP' && warehouse.tripId) {
+      const crew = await this.prisma.tripCrew.findFirst({
+        where: { tripId: warehouse.tripId, userId },
+      });
+      if (crew) return;
+    }
+
     throw new ForbiddenException();
   }
 
